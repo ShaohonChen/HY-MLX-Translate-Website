@@ -3,6 +3,8 @@
 > A local translation website deployed on Apple Silicon Mac using MLX, based on Tencent Hunyuan 1.8B model. Supports streaming translation results for real-time translation experience.
 > ⚠️ 99% of this project's code is implemented by vibe coding! There may be some bugs or imperfections. Please use with caution.
 
+![hy-logo](docs/hy-logo.png)
+
 Since Google Translate often doesn't work properly due to network issues, I decided to create a local translation assistant. Since I use a Mac computer, I adopted the [MLX-LM framework](https://github.com/MLX-LM/MLX-LM) as the inference engine to accelerate LLM running speed on Mac.
 
 For model selection, I chose the [Tencent Hunyuan 1.8B model](https://huggingface.co/tencent/HY-MT1.5-1.8B) because it claims on Huggingface to have excellent translation performance, with the original statement being "achieving industry-leading level among models of the same scale, surpassing most commercial translation APIs" (I haven't compared it with other models of the same parameters). Subjectively, this model can provide high-quality translation results in paper translation scenarios.
