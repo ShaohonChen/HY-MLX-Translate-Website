@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>混元翻译助手</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: white;
+            min-height: 100vh;
+            padding: 24px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #111;
+            margin-bottom: 24px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 16px;
+            background: #fafafa;
+            border-radius: 6px;
+            border: 1px solid #e5e5e5;
+        }
+
+        .language-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            white-space: nowrap;
+        }
+
+        .language-selector {
+            display: flex;
+            flex: 1;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .select-wrapper {
+            flex: 1;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
+            color: #111;
+            transition: border-color 0.2s;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #666;
+        }
+
+        .quick-lang-btn {
+            padding: 10px 20px;
+            background: white;
+            color: #333;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .quick-lang-btn:hover {
+            background: #f0f0f0;
+            border-color: #999;
+        }
+
+        .quick-lang-btn.active {
+            background: #111;
+            color: white;
+            border-color: #111;
+        }
+
+        .action-section {
+            display: flex;
+            gap: 12px;
+        }
+
+        .action-section .btn {
+            flex: 1;
+        }
+
+        .btn {
+            padding: 12px 40px;
+            background: #111;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            background: #333;
+        }
+
+        .btn:disabled {
+            background: #999;
+            cursor: not-allowed;
+        }
+
+        .btn-cancel {
+            background: #dc3545;
+        }
+
+        .btn-cancel:hover {
+            background: #c82333;
+        }
+
+        .btn-reference {
+            background: #6c757d;
+        }
+
+        .btn-reference:hover {
+            background: #5a6268;
+        }
+
+        .btn-reference.active {
+            background: #495057;
+        }
+
+        .reference-section {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .reference-section.visible {
+            display: flex;
+        }
+
+        .reference-textarea {
+            min-height: 120px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .editor-panel {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 15px;
+            min-height: 400px;
+            resize: vertical;
+            transition: border-color 0.2s;
+            font-family: inherit;
+            line-height: 1.6;
+            color: #111;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #666;
+        }
+
+        textarea:disabled {
+            background: #fafafa;
+            color: #333;
+        }
+
+        .result-textarea {
+            background: #fafafa;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #f5f5f5;
+            border: 1px solid #ccc;
+            color: #c00;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-top: 16px;
+            font-size: 14px;
+        }
+
+        .stats-panel {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            padding: 12px;
+            background: #fafafa;
+            border-radius: 6px;
+            border: 1px solid #e5e5e5;
+            margin-top: 12px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #111;
+        }
+
+        .footer {
+            margin-top: 24px;
+            padding: 16px;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .footer a {
+            color: #666;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            color: #333;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>混元1.8B模型Mac本地翻译助手</h1>
+
+    <div id="stats" class="stats-panel">
+        <div class="stat-item">
+            <span class="stat-label">Prompt Tokens</span>
+            <span class="stat-value" id="stat-prompt-tokens">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Complete Tokens</span>
+            <span class="stat-value" id="stat-complete-tokens">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Prefill Speed (tokens/s)</span>
+            <span class="stat-value" id="stat-prefill-speed">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Complete Speed (tokens/s)</span>
+            <span class="stat-value" id="stat-complete-speed">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Total Time (s)</span>
+            <span class="stat-value" id="stat-total-time">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">TTFT (s)</span>
+            <span class="stat-value" id="stat-ttft">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">TPOT (s)</span>
+            <span class="stat-value" id="stat-tpot">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Total Tokens</span>
+            <span class="stat-value" id="stat-token-count">0</span>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="language-section">
+            <div class="section-title">目标语言 (Target Language)</div>
+            <div class="language-selector">
+                <div class="select-wrapper">
+                    <select id="targetLanguage">
+                        <option value="">加载中...</option>
+                    </select>
+                </div>
+                <div id="quickLangButtons"></div>
+            </div>
+        </div>
+        <div class="action-section">
+            <button class="btn btn-reference" id="referenceBtn" onclick="toggleReference()">添加参考文本 (Add Reference)</button>
+            <button class="btn" id="translateBtn" onclick="handleButtonClick()">翻译 (Translate)</button>
+        </div>
+        <div class="reference-section" id="referenceSection">
+            <div class="section-title">参考文本 (Reference Text)</div>
+            <textarea id="referText" class="reference-textarea" placeholder="请输入参考文本信息..."></textarea>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="editor-panel">
+            <div class="panel-header">
+                    <span class="panel-title">输入文本 (Input Text)</span>
+                </div>
+            <textarea id="sourceText" placeholder="请输入要翻译的文本..."></textarea>
+        </div>
+
+        <div class="editor-panel">
+            <div class="panel-header">
+                    <span class="panel-title">翻译结果 (Translation Result)</span>
+                </div>
+            <textarea id="resultText" class="result-textarea" disabled placeholder="翻译结果将显示在这里..."></textarea>
+        </div>
+    </div>
+
+    <div id="error" style="display: none;" class="error"></div>
+
+    <div class="footer">
+        作者：ShaohonChen |
+        <a href="https://github.com/ShaohonChen/HY-MLX-Translator" target="_blank">GitHub</a><br>
+        鸣谢：豆包帮我写了所有代码、混元提供了翻译模型技术
+    </div>
+
+    <script>
+        async function loadLanguages() {
+            try {
+                const response = await fetch('/api/languages');
+                const data = await response.json();
+
+                const select = document.getElementById('targetLanguage');
+                select.innerHTML = '';
+
+                // 填充语言下拉选择
+                for (const [key, value] of Object.entries(data.languages)) {
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = `${key} (${value})`;
+                    select.appendChild(option);
+                }
+
+                // 动态生成快捷按钮
+                const quickLangButtonsContainer = document.getElementById('quickLangButtons');
+                quickLangButtonsContainer.innerHTML = '';
+                for (const lang of data.quick_langs) {
+                    const btn = document.createElement('button');
+                    btn.className = 'quick-lang-btn';
+                    btn.id = `quick${lang.key}Btn`;
+                    btn.textContent = lang.label;
+                    btn.onclick = () => selectLanguage(lang.key);
+                    quickLangButtonsContainer.appendChild(btn);
+                }
+
+                // 默认设置为中文
+                if (data.quick_langs.length > 0) {
+                    select.value = data.quick_langs[0].key;
+                } else {
+                    select.value = Object.keys(data.languages)[0];
+                }
+                updateQuickLangButtons();
+            } catch (error) {
+                console.error('加载语言列表失败:', error);
+            }
+        }
+
+        function selectLanguage(lang) {
+            const select = document.getElementById('targetLanguage');
+            select.value = lang;
+            updateQuickLangButtons();
+        }
+
+        function updateQuickLangButtons() {
+            const select = document.getElementById('targetLanguage');
+            const quickButtons = document.querySelectorAll('#quickLangButtons .quick-lang-btn');
+            
+            quickButtons.forEach(btn => {
+                const langKey = btn.id.replace('quick', '').replace('Btn', '');
+                btn.classList.toggle('active', select.value === langKey);
+            });
+        }
+
+        function toggleReference() {
+            const referenceBtn = document.getElementById('referenceBtn');
+            const referenceSection = document.getElementById('referenceSection');
+            const referText = document.getElementById('referText');
+            
+            referenceSection.classList.toggle('visible');
+            referenceBtn.classList.toggle('active');
+            
+            if (!referenceSection.classList.contains('visible')) {
+                referText.value = '';
+            }
+        }
+
+        function resetStats() {
+            document.getElementById('stat-token-count').textContent = '0';
+            document.getElementById('stat-prompt-tokens').textContent = '0';
+            document.getElementById('stat-complete-tokens').textContent = '0';
+            document.getElementById('stat-prefill-speed').textContent = '0';
+            document.getElementById('stat-complete-speed').textContent = '0';
+            document.getElementById('stat-total-time').textContent = '0';
+            document.getElementById('stat-ttft').textContent = '0';
+            document.getElementById('stat-tpot').textContent = '0';
+        }
+
+        let currentRequestId = null;
+        let currentReader = null;
+        let isTranslating = false;
+
+        function handleButtonClick() {
+            if (isTranslating) {
+                cancelTranslate();
+            } else {
+                doTranslate();
+            }
+        }
+
+        async function doTranslate() {
+            const targetLanguage = document.getElementById('targetLanguage').value;
+            const sourceText = document.getElementById('sourceText').value.trim();
+            const referText = document.getElementById('referText').value.trim();
+            const btn = document.getElementById('translateBtn');
+            const resultText = document.getElementById('resultText');
+            const errorDiv = document.getElementById('error');
+
+            resultText.value = '';
+            errorDiv.style.display = 'none';
+            resetStats();
+
+            if (!sourceText) {
+                errorDiv.textContent = '请输入要翻译的文本';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (!targetLanguage) {
+                errorDiv.textContent = '请选择目标语言';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            isTranslating = true;
+            currentRequestId = Date.now().toString();
+            btn.innerHTML = '<span class="loading"></span>翻译中 (Translating)...';
+            btn.classList.add('btn-cancel');
+
+            try {
+                const response = await fetch('/api/translate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: sourceText,
+                        target_language: targetLanguage,
+                        request_id: currentRequestId,
+                        refer_text: referText
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    errorDiv.textContent = errorData.error || '翻译失败';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                currentReader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let stats = null;
+
+                while (true) {
+                    const { done, value } = await currentReader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                if (data.type === 'text') {
+                                    resultText.value += data.content;
+                                    resultText.scrollTop = resultText.scrollHeight;
+                                } else if (data.type === 'stats') {
+                                    stats = data.content;
+                                }
+                            } catch (e) {
+                                console.error('解析数据失败:', e, line);
+                            }
+                        }
+                    }
+                }
+
+                if (stats) {
+                    document.getElementById('stat-token-count').textContent = stats.token_count;
+                    document.getElementById('stat-prompt-tokens').textContent = stats.prompt_tokens;
+                    document.getElementById('stat-complete-tokens').textContent = stats.complete_tokens;
+                    document.getElementById('stat-prefill-speed').textContent = stats.prefill_speed;
+                    document.getElementById('stat-complete-speed').textContent = stats.complete_speed;
+                    document.getElementById('stat-total-time').textContent = stats.total_time;
+                    document.getElementById('stat-ttft').textContent = stats.ttft;
+                    document.getElementById('stat-tpot').textContent = stats.avg_tpot;
+                }
+
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    errorDiv.textContent = '网络错误，请稍后重试';
+                    errorDiv.style.display = 'block';
+                }
+            } finally {
+                isTranslating = false;
+                currentReader = null;
+                currentRequestId = null;
+                btn.textContent = '翻译';
+                btn.classList.remove('btn-cancel');
+            }
+        }
+
+        async function cancelTranslate() {
+            if (!isTranslating || !currentRequestId) {
+                return;
+            }
+
+            try {
+                await fetch('/api/cancel', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        request_id: currentRequestId
+                    })
+                });
+            } catch (error) {
+                console.error('取消翻译请求失败:', error);
+            }
+        }
+
+        document.getElementById('targetLanguage').addEventListener('change', updateQuickLangButtons);
+        loadLanguages();
+    </script>
+</body>
+</html>
