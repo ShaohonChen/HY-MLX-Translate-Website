@@ -3,7 +3,7 @@
 > A local translation website deployed on Apple Silicon Mac using MLX, based on Tencent Hunyuan 1.8B model. Supports streaming translation results for real-time translation experience.
 > ⚠️ 99% of this project's code is implemented by vibe coding! There may be some bugs or imperfections. Please use with caution.
 
-![hy-logo](docs/hy-logo.png)
+<img src="docs/hy-logo.png" alt="hy-logo" width="50%" />
 
 Since Google Translate often doesn't work properly due to network issues, I decided to create a local translation assistant. Since I use a Mac computer, I adopted the [MLX-LM framework](https://github.com/MLX-LM/MLX-LM) as the inference engine to accelerate LLM running speed on Mac.
 

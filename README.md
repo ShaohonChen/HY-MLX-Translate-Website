@@ -5,7 +5,7 @@
 > 基于腾讯混元（Hunyuan）1.8B模型，使用 MLX 在 Apple Silicon Mac 上本地部署的翻译网站。支持流式生成翻译结果，提供实时的翻译体验。
 > ⚠️ 该项目99%代码来由vibe coding实现！可能存在一些bug或不完善的地方。请在使用时保持谨慎。
 
-![hy-logo](docs/hy-logo.png)
+<img src="docs/hy-logo.png" alt="hy-logo" width="50%" />
 
 由于Google Translate经常因为网络问题而无法正常工作，所以决定vibe coding一个本地的翻译助手。由于笔者本人用的Mac电脑，因此采用了[MLX-LM框架](https://github.com/MLX-LM/MLX-LM)作为推理引擎来加速Mac上运行LLM的速度。
 
