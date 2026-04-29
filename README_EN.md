@@ -16,6 +16,10 @@ For model selection, I chose the [Tencent Hunyuan 1.8B model](https://huggingfac
 | ![Translation Assistant Screenshot](docs/page.png) |
 | *Translation Assistant Interface (Since it's a productivity tool, the interface is kept as simple as possible)* |
 
+## Recent Updates
+
+- ✨ Added "Remove Line Breaks" button to instantly remove all line breaks from input text, solving the issue of excessive intermittent line breaks when copying and pasting content
+
 ## Project Features
 
 - 🍎 **Mac-friendly**: Runs completely locally and is fast on Apple M-series chips

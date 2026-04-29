@@ -347,6 +347,7 @@
         </div>
         <div class="action-section">
             <button class="btn btn-reference" id="referenceBtn" onclick="toggleReference()">添加参考文本 (Add Reference)</button>
+            <button class="btn btn-reference" id="removeBreaksBtn" onclick="removeLineBreaks()">消除回车 (Remove Line Breaks)</button>
             <button class="btn" id="translateBtn" onclick="handleButtonClick()">翻译 (Translate)</button>
         </div>
         <div class="reference-section" id="referenceSection">
@@ -446,6 +447,16 @@
             
             if (!referenceSection.classList.contains('visible')) {
                 referText.value = '';
+            }
+        }
+
+        function removeLineBreaks() {
+            const sourceText = document.getElementById('sourceText');
+            const referText = document.getElementById('referText');
+            
+            sourceText.value = sourceText.value.replace(/[\r\n]+/g, '');
+            if (referText.value) {
+                referText.value = referText.value.replace(/[\r\n]+/g, '');
             }
         }
 
