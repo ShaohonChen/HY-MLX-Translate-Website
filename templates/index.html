@@ -204,6 +204,7 @@
             font-family: inherit;
             line-height: 1.6;
             color: #111;
+            background: transparent;
         }
 
         textarea:focus {
@@ -211,13 +212,58 @@
             border-color: #666;
         }
 
-        textarea:disabled {
+        textarea:disabled,
+        textarea[readonly] {
             background: #fafafa;
             color: #333;
         }
 
         .result-textarea {
+            background: transparent;
+        }
+
+        .text-match-box {
+            position: relative;
+            min-height: 400px;
+            border-radius: 4px;
+            background: white;
+        }
+
+        .text-match-box.result-box {
             background: #fafafa;
+        }
+
+        .text-match-box textarea {
+            position: relative;
+            z-index: 1;
+            display: block;
+        }
+
+        .text-match-box textarea[readonly] {
+            background: transparent;
+        }
+
+        .highlight-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+            padding: 14px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 15px;
+            line-height: 1.6;
+            color: transparent;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            pointer-events: none;
+        }
+
+        .highlight-layer mark {
+            color: transparent;
+            background: rgba(255, 230, 120, 0.75);
+            border-radius: 2px;
         }
 
         .loading {
@@ -356,28 +402,34 @@
         </div>
     </div>
 
-    <div class="main-content">
-        <div class="editor-panel">
-            <div class="panel-header">
-                    <span class="panel-title">输入文本 (Input Text)</span>
-                </div>
-            <textarea id="sourceText" placeholder="请输入要翻译的文本..."></textarea>
-        </div>
+	    <div class="main-content">
+	        <div class="editor-panel">
+	            <div class="panel-header">
+	                <span class="panel-title">输入文本 (Input Text)</span>
+	            </div>
+	            <div class="text-match-box">
+	                <div id="sourceHighlight" class="highlight-layer"></div>
+	                <textarea id="sourceText" placeholder="请输入要翻译的文本..."></textarea>
+	            </div>
+	        </div>
 
-        <div class="editor-panel">
-            <div class="panel-header">
-                    <span class="panel-title">翻译结果 (Translation Result)</span>
-                </div>
-            <textarea id="resultText" class="result-textarea" disabled placeholder="翻译结果将显示在这里..."></textarea>
-        </div>
-    </div>
+	        <div class="editor-panel">
+	            <div class="panel-header">
+	                <span class="panel-title">翻译结果 (Translation Result)</span>
+	            </div>
+	            <div class="text-match-box result-box">
+	                <div id="resultHighlight" class="highlight-layer"></div>
+	                <textarea id="resultText" class="result-textarea" readonly placeholder="翻译结果将显示在这里..."></textarea>
+	            </div>
+	        </div>
+	    </div>
 
     <div id="error" style="display: none;" class="error"></div>
 
     <div class="footer">
         作者：ShaohonChen |
         <a href="https://github.com/ShaohonChen/HY-MLX-Translator" target="_blank">GitHub</a><br>
-        鸣谢：豆包帮我写了所有代码、混元提供了翻译模型技术
+        鸣谢：豆包和codex帮我写了所有代码、混元提供了翻译模型技术
     </div>
 
     <script>
@@ -430,7 +482,7 @@
         function updateQuickLangButtons() {
             const select = document.getElementById('targetLanguage');
             const quickButtons = document.querySelectorAll('#quickLangButtons .quick-lang-btn');
-            
+
             quickButtons.forEach(btn => {
                 const langKey = btn.id.replace('quick', '').replace('Btn', '');
                 btn.classList.toggle('active', select.value === langKey);
@@ -441,24 +493,25 @@
             const referenceBtn = document.getElementById('referenceBtn');
             const referenceSection = document.getElementById('referenceSection');
             const referText = document.getElementById('referText');
-            
+
             referenceSection.classList.toggle('visible');
             referenceBtn.classList.toggle('active');
-            
+
             if (!referenceSection.classList.contains('visible')) {
                 referText.value = '';
             }
         }
 
-        function removeLineBreaks() {
-            const sourceText = document.getElementById('sourceText');
-            const referText = document.getElementById('referText');
-            
-            sourceText.value = sourceText.value.replace(/[\r\n]+/g, '');
-            if (referText.value) {
-                referText.value = referText.value.replace(/[\r\n]+/g, '');
+            function removeLineBreaks() {
+                const sourceText = document.getElementById('sourceText');
+                const referText = document.getElementById('referText');
+
+                sourceText.value = sourceText.value.replace(/[\r\n]+/g, '');
+                if (referText.value) {
+                    referText.value = referText.value.replace(/[\r\n]+/g, '');
+                }
+                handleTextChanged('source');
             }
-        }
 
         function resetStats() {
             document.getElementById('stat-token-count').textContent = '0';
@@ -472,13 +525,336 @@
         }
 
         let currentRequestId = null;
-        let currentReader = null;
-        let isTranslating = false;
-        let autoScrollEnabled = true;
+            let currentReader = null;
+            let isTranslating = false;
+            let autoScrollEnabled = true;
+            let resultTextComplete = true;
+            let activeSelectionSide = null;
+            let selectionTimer = null;
+            let sentenceSegmenter = null;
 
-        function handleButtonClick() {
-            if (isTranslating) {
-                cancelTranslate();
+            const sourceTextarea = document.getElementById('sourceText');
+            const resultTextarea = document.getElementById('resultText');
+            const sourceHighlightLayer = document.getElementById('sourceHighlight');
+            const resultHighlightLayer = document.getElementById('resultHighlight');
+            const textIndexes = {
+                source: null,
+                result: null
+            };
+
+            function getTextarea(side) {
+                return side === 'source' ? sourceTextarea : resultTextarea;
+            }
+
+            function getHighlightLayer(side) {
+                return side === 'source' ? sourceHighlightLayer : resultHighlightLayer;
+            }
+
+            function getOtherSide(side) {
+                return side === 'source' ? 'result' : 'source';
+            }
+
+            function escapeHtml(text) {
+                return text
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function hasSentenceEnd(text) {
+                return /[。！？.!?]["'”’）)\]】》」』]*$/.test(text.trim());
+            }
+
+            function addSentence(sentences, paragraphText, paragraphStart, rawStart, rawEnd, textComplete) {
+                let start = rawStart;
+                let end = rawEnd;
+
+                while (start < end && /\s/.test(paragraphText[start])) {
+                    start += 1;
+                }
+                while (end > start && /\s/.test(paragraphText[end - 1])) {
+                    end -= 1;
+                }
+                if (start >= end) {
+                    return;
+                }
+
+                const content = paragraphText.slice(start, end);
+                sentences.push({
+                    sentenceIndex: sentences.length,
+                    start: paragraphStart + start,
+                    end: paragraphStart + end,
+                    isComplete: textComplete || hasSentenceEnd(content)
+                });
+            }
+
+            function getSentenceSegmenter() {
+                if (!('Intl' in window) || !('Segmenter' in Intl)) {
+                    return null;
+                }
+                if (!sentenceSegmenter) {
+                    sentenceSegmenter = new Intl.Segmenter(undefined, { granularity: 'sentence' });
+                }
+                return sentenceSegmenter;
+            }
+
+            function splitSentences(paragraphText, paragraphStart, textComplete) {
+                const sentences = [];
+                const segmenter = getSentenceSegmenter();
+
+                if (segmenter) {
+                    const segments = Array.from(segmenter.segment(paragraphText));
+                    for (const segment of segments) {
+                        addSentence(
+                            sentences,
+                            paragraphText,
+                            paragraphStart,
+                            segment.index,
+                            segment.index + segment.segment.length,
+                            textComplete
+                        );
+                    }
+                    return sentences;
+                }
+
+                const sentenceEndPattern = /[。！？.!?]+["'”’）)\]】》」』]*/g;
+                let cursor = 0;
+                let match;
+                while ((match = sentenceEndPattern.exec(paragraphText)) !== null) {
+                    const end = match.index + match[0].length;
+                    addSentence(sentences, paragraphText, paragraphStart, cursor, end, textComplete);
+                    cursor = end;
+                }
+                if (cursor < paragraphText.length) {
+                    addSentence(sentences, paragraphText, paragraphStart, cursor, paragraphText.length, textComplete);
+                }
+
+                return sentences;
+            }
+
+            function buildTextIndex(text, textComplete) {
+                const paragraphs = [];
+                const paragraphPattern = /[^\r\n]+/g;
+                let match;
+
+                while ((match = paragraphPattern.exec(text)) !== null) {
+                    if (!match[0].trim()) {
+                        continue;
+                    }
+                    const paragraph = {
+                        paragraphIndex: paragraphs.length,
+                        start: match.index,
+                        end: match.index + match[0].length,
+                        sentences: splitSentences(match[0], match.index, textComplete)
+                    };
+                    paragraphs.push(paragraph);
+                }
+
+                return {
+                    text,
+                    paragraphs
+                };
+            }
+
+            function updateTextIndex(side) {
+                const textarea = getTextarea(side);
+                const textComplete = side === 'source' ? true : resultTextComplete;
+                textIndexes[side] = buildTextIndex(textarea.value, textComplete);
+            }
+
+            function updateAllTextIndexes() {
+                updateTextIndex('source');
+                updateTextIndex('result');
+            }
+
+            function rangesIntersect(startA, endA, startB, endB) {
+                return startA < endB && endA > startB;
+            }
+
+            function getTouchedParagraphs(index, selectionStart, selectionEnd) {
+                return index.paragraphs.filter(paragraph => (
+                    rangesIntersect(selectionStart, selectionEnd, paragraph.start, paragraph.end)
+                ));
+            }
+
+            function getTouchedSentences(paragraph, selectionStart, selectionEnd) {
+                return paragraph.sentences.filter(sentence => (
+                    sentence.isComplete &&
+                    rangesIntersect(selectionStart, selectionEnd, sentence.start, sentence.end)
+                ));
+            }
+
+            function mapParagraphsToRanges(paragraphs, targetIndex) {
+                const firstIndex = paragraphs[0].paragraphIndex;
+                const lastIndex = paragraphs[paragraphs.length - 1].paragraphIndex;
+
+                return targetIndex.paragraphs
+                    .filter(paragraph => (
+                        paragraph.paragraphIndex >= firstIndex &&
+                        paragraph.paragraphIndex <= lastIndex
+                    ))
+                    .map(paragraph => ({
+                        start: paragraph.start,
+                        end: paragraph.end
+                    }));
+            }
+
+            function mapSentencesToRanges(paragraph, sentences, targetIndex) {
+                const targetParagraph = targetIndex.paragraphs.find(item => (
+                    item.paragraphIndex === paragraph.paragraphIndex
+                ));
+                if (!targetParagraph) {
+                    return [];
+                }
+
+                const firstIndex = sentences[0].sentenceIndex;
+                const lastIndex = sentences[sentences.length - 1].sentenceIndex;
+
+                return targetParagraph.sentences
+                    .filter(sentence => (
+                        sentence.isComplete &&
+                        sentence.sentenceIndex >= firstIndex &&
+                        sentence.sentenceIndex <= lastIndex
+                    ))
+                    .map(sentence => ({
+                        start: sentence.start,
+                        end: sentence.end
+                    }));
+            }
+
+            function getMatchedRanges(side) {
+                const textarea = getTextarea(side);
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                if (start === end) {
+                    return [];
+                }
+
+                updateAllTextIndexes();
+
+                const sourceIndex = textIndexes[side];
+                const targetIndex = textIndexes[getOtherSide(side)];
+                if (!sourceIndex || !targetIndex || !targetIndex.text) {
+                    return [];
+                }
+
+                const touchedParagraphs = getTouchedParagraphs(sourceIndex, start, end);
+                if (touchedParagraphs.length === 0) {
+                    return [];
+                }
+
+                if (touchedParagraphs.length > 1) {
+                    return mapParagraphsToRanges(touchedParagraphs, targetIndex);
+                }
+
+                const touchedSentences = getTouchedSentences(touchedParagraphs[0], start, end);
+                if (touchedSentences.length === 0) {
+                    return [];
+                }
+
+                return mapSentencesToRanges(touchedParagraphs[0], touchedSentences, targetIndex);
+            }
+
+            function mergeRanges(ranges, textLength) {
+                const normalized = ranges
+                    .map(range => ({
+                        start: Math.max(0, Math.min(range.start, textLength)),
+                        end: Math.max(0, Math.min(range.end, textLength))
+                    }))
+                    .filter(range => range.start < range.end)
+                    .sort((a, b) => a.start - b.start);
+
+                const merged = [];
+                for (const range of normalized) {
+                    const last = merged[merged.length - 1];
+                    if (last && range.start <= last.end) {
+                        last.end = Math.max(last.end, range.end);
+                    } else {
+                        merged.push({ ...range });
+                    }
+                }
+                return merged;
+            }
+
+            function renderHighlight(side, ranges) {
+                const textarea = getTextarea(side);
+                const layer = getHighlightLayer(side);
+                const mergedRanges = mergeRanges(ranges, textarea.value.length);
+
+                if (mergedRanges.length === 0) {
+                    layer.innerHTML = '';
+                    return;
+                }
+
+                let html = '';
+                let cursor = 0;
+                for (const range of mergedRanges) {
+                    html += escapeHtml(textarea.value.slice(cursor, range.start));
+                    html += `<mark>${escapeHtml(textarea.value.slice(range.start, range.end))}</mark>`;
+                    cursor = range.end;
+                }
+                html += escapeHtml(textarea.value.slice(cursor));
+                if (textarea.value.endsWith('\n')) {
+                    html += ' ';
+                }
+                layer.innerHTML = html;
+                syncHighlightScroll(side);
+            }
+
+            function clearHighlights() {
+                activeSelectionSide = null;
+                renderHighlight('source', []);
+                renderHighlight('result', []);
+            }
+
+            function applySelectionHighlight(side) {
+                const otherSide = getOtherSide(side);
+                const textarea = getTextarea(side);
+
+                if (textarea.selectionStart === textarea.selectionEnd) {
+                    clearHighlights();
+                    return;
+                }
+
+                activeSelectionSide = side;
+                renderHighlight(side, []);
+                renderHighlight(otherSide, getMatchedRanges(side));
+            }
+
+            function scheduleSelectionHighlight(side) {
+                if (side === 'result' && isTranslating) {
+                    autoScrollEnabled = false;
+                }
+                window.clearTimeout(selectionTimer);
+                selectionTimer = window.setTimeout(() => {
+                    applySelectionHighlight(side);
+                }, 100);
+            }
+
+            function refreshActiveHighlight() {
+                if (!activeSelectionSide) {
+                    return;
+                }
+                applySelectionHighlight(activeSelectionSide);
+            }
+
+            function syncHighlightScroll(side) {
+                const textarea = getTextarea(side);
+                const layer = getHighlightLayer(side);
+                layer.scrollTop = textarea.scrollTop;
+                layer.scrollLeft = textarea.scrollLeft;
+            }
+
+            function handleTextChanged(side) {
+                updateTextIndex(side);
+                clearHighlights();
+            }
+
+            function handleButtonClick() {
+                if (isTranslating) {
+                    cancelTranslate();
             } else {
                 doTranslate();
             }
@@ -490,23 +866,30 @@
             const referText = document.getElementById('referText').value.trim();
             const btn = document.getElementById('translateBtn');
             const resultText = document.getElementById('resultText');
-            const errorDiv = document.getElementById('error');
+                const errorDiv = document.getElementById('error');
 
-            resultText.value = '';
-            errorDiv.style.display = 'none';
-            resetStats();
+                resultText.value = '';
+                resultTextComplete = false;
+                updateAllTextIndexes();
+                clearHighlights();
+                errorDiv.style.display = 'none';
+                resetStats();
 
-            if (!sourceText) {
-                errorDiv.textContent = '请输入要翻译的文本';
-                errorDiv.style.display = 'block';
-                return;
-            }
+                if (!sourceText) {
+                    errorDiv.textContent = '请输入要翻译的文本';
+                    errorDiv.style.display = 'block';
+                    resultTextComplete = true;
+                    updateTextIndex('result');
+                    return;
+                }
 
-            if (!targetLanguage) {
-                errorDiv.textContent = '请选择目标语言';
-                errorDiv.style.display = 'block';
-                return;
-            }
+                if (!targetLanguage) {
+                    errorDiv.textContent = '请选择目标语言';
+                    errorDiv.style.display = 'block';
+                    resultTextComplete = true;
+                    updateTextIndex('result');
+                    return;
+                }
 
             isTranslating = true;
             autoScrollEnabled = true;
@@ -551,14 +934,17 @@
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
                             try {
-                                const data = JSON.parse(line.slice(6));
-                                if (data.type === 'text') {
-                                    resultText.value += data.content;
-                                    if (autoScrollEnabled) {
-                                        resultText.scrollTop = resultText.scrollHeight;
-                                    }
-                                } else if (data.type === 'stats') {
-                                    stats = data.content;
+                                    const data = JSON.parse(line.slice(6));
+                                    if (data.type === 'text') {
+                                        resultText.value += data.content;
+                                        updateTextIndex('result');
+                                        refreshActiveHighlight();
+                                        if (autoScrollEnabled) {
+                                            resultText.scrollTop = resultText.scrollHeight;
+                                            syncHighlightScroll('result');
+                                        }
+                                    } else if (data.type === 'stats') {
+                                        stats = data.content;
                                 }
                             } catch (e) {
                                 console.error('解析数据失败:', e, line);
@@ -583,11 +969,14 @@
                     errorDiv.textContent = '网络错误，请稍后重试';
                     errorDiv.style.display = 'block';
                 }
-            } finally {
-                isTranslating = false;
-                currentReader = null;
-                currentRequestId = null;
-                btn.innerHTML = '翻译 (Translate)';
+                } finally {
+                    isTranslating = false;
+                    resultTextComplete = true;
+                    updateTextIndex('result');
+                    refreshActiveHighlight();
+                    currentReader = null;
+                    currentRequestId = null;
+                    btn.innerHTML = '翻译 (Translate)';
                 btn.classList.remove('btn-cancel');
             }
         }
@@ -613,15 +1002,40 @@
         }
 
         document.getElementById('targetLanguage').addEventListener('change', updateQuickLangButtons);
-        
-        const resultText = document.getElementById('resultText');
-        resultText.addEventListener('wheel', function() {
-            if (isTranslating) {
-                autoScrollEnabled = false;
+
+            sourceTextarea.addEventListener('input', () => handleTextChanged('source'));
+            sourceTextarea.addEventListener('scroll', () => syncHighlightScroll('source'));
+            resultTextarea.addEventListener('scroll', () => syncHighlightScroll('result'));
+            sourceTextarea.addEventListener('select', () => scheduleSelectionHighlight('source'));
+            resultTextarea.addEventListener('select', () => scheduleSelectionHighlight('result'));
+
+            for (const eventName of ['mouseup', 'keyup', 'touchend']) {
+                sourceTextarea.addEventListener(eventName, () => scheduleSelectionHighlight('source'));
+                resultTextarea.addEventListener(eventName, () => scheduleSelectionHighlight('result'));
             }
-        });
-        
-        loadLanguages();
+
+            document.addEventListener('selectionchange', () => {
+                if (document.activeElement === sourceTextarea) {
+                    scheduleSelectionHighlight('source');
+                } else if (document.activeElement === resultTextarea) {
+                    scheduleSelectionHighlight('result');
+                }
+            });
+
+            document.addEventListener('mousedown', (event) => {
+                if (!event.target.closest('.text-match-box')) {
+                    clearHighlights();
+                }
+            });
+
+            resultTextarea.addEventListener('wheel', function() {
+                if (isTranslating) {
+                    autoScrollEnabled = false;
+                }
+            });
+
+            updateAllTextIndexes();
+            loadLanguages();
     </script>
 </body>
 </html>
