@@ -541,6 +541,21 @@
                 source: null,
                 result: null
             };
+            const SENTENCE_END_PATTERN = /[。！？.!?]/;
+            const SENTENCE_CLOSER_PATTERN = /["'”’）)\]】》」』]/;
+            const CONTINUATION_START_PATTERN = /[a-z0-9\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af,，、;；:：）)\]】》」』]/;
+            const ABBREVIATION_TAIL_PATTERN = /(?:^|[\s([（【「『,，、;；:：])((?:[A-Za-z]\.){2,}|[A-Za-z]{1,12}\.)$/;
+            const DOTTED_ABBREVIATION_PATTERN = /^(?:[A-Za-z]\.){2,}$/;
+            const ALPHA_DOT_PATTERN = /[A-Za-z.]/;
+            const WHITESPACE_PATTERN = /\s/;
+            const HARD_ABBREVIATIONS = new Set([
+                'e.g.', 'i.e.', 'vs.', 'cf.', 'mr.', 'mrs.', 'ms.', 'dr.',
+                'prof.', 'sr.', 'jr.', 'st.'
+            ]);
+            const SOFT_ABBREVIATIONS = new Set([
+                'etc.', 'al.', 'fig.', 'eq.', 'ref.', 'no.', 'vol.', 'pp.',
+                'inc.', 'ltd.', 'co.', 'corp.', 'dept.', 'univ.'
+            ]);
 
             function getTextarea(side) {
                 return side === 'source' ? sourceTextarea : resultTextarea;
@@ -564,17 +579,111 @@
             }
 
             function hasSentenceEnd(text) {
-                return /[。！？.!?]["'”’）)\]】》」』]*$/.test(text.trim());
+                const trimmed = trimSentenceClosers(text.trim());
+                if (!trimmed) {
+                    return false;
+                }
+
+                const endIndex = trimmed.length - 1;
+                const endChar = trimmed[endIndex];
+                return SENTENCE_END_PATTERN.test(endChar) &&
+                    (endChar !== '.' || !isAbbreviationPeriod(trimmed, endIndex, false));
+            }
+
+            function getSentenceBoundaryEnd(text, punctuationIndex) {
+                let end = punctuationIndex + 1;
+                while (end < text.length && SENTENCE_END_PATTERN.test(text[end])) {
+                    end += 1;
+                }
+                while (end < text.length && SENTENCE_CLOSER_PATTERN.test(text[end])) {
+                    end += 1;
+                }
+                return end;
+            }
+
+            function getLastBoundaryCharIndex(text, offset) {
+                let index = offset - 1;
+                while (index >= 0 && WHITESPACE_PATTERN.test(text[index])) {
+                    index -= 1;
+                }
+                while (index >= 0 && SENTENCE_CLOSER_PATTERN.test(text[index])) {
+                    index -= 1;
+                }
+                return index;
+            }
+
+            function getFirstContentChar(text, offset) {
+                for (let index = offset; index < text.length; index += 1) {
+                    if (!WHITESPACE_PATTERN.test(text[index])) {
+                        return text[index];
+                    }
+                }
+                return '';
+            }
+
+            function trimSentenceClosers(text) {
+                let end = text.length;
+                while (end > 0 && SENTENCE_CLOSER_PATTERN.test(text[end - 1])) {
+                    end -= 1;
+                }
+                return text.slice(0, end);
+            }
+
+            function getAlphaDotToken(text, offset) {
+                let start = offset;
+                let end = offset + 1;
+                while (start > 0 && ALPHA_DOT_PATTERN.test(text[start - 1])) {
+                    start -= 1;
+                }
+                while (end < text.length && ALPHA_DOT_PATTERN.test(text[end])) {
+                    end += 1;
+                }
+                return { end, value: text.slice(start, end) };
+            }
+
+            function getAbbreviationBefore(text, dotIndex) {
+                const prefix = trimSentenceClosers(text.slice(0, dotIndex + 1)).trim();
+                return prefix.match(ABBREVIATION_TAIL_PATTERN)?.[1].toLowerCase() || '';
+            }
+
+            function isInsideDottedAbbreviation(text, dotIndex) {
+                const token = getAlphaDotToken(text, dotIndex);
+                return DOTTED_ABBREVIATION_PATTERN.test(token.value) && dotIndex < token.end - 1;
+            }
+
+            function isKnownAbbreviation(abbreviation) {
+                return HARD_ABBREVIATIONS.has(abbreviation) ||
+                    SOFT_ABBREVIATIONS.has(abbreviation) ||
+                    DOTTED_ABBREVIATION_PATTERN.test(abbreviation);
+            }
+
+            function isAbbreviationPeriod(text, dotIndex, textComplete) {
+                if (isInsideDottedAbbreviation(text, dotIndex)) {
+                    return true;
+                }
+
+                const abbreviation = getAbbreviationBefore(text, dotIndex);
+                if (!isKnownAbbreviation(abbreviation)) {
+                    return false;
+                }
+
+                const nextChar = getFirstContentChar(text, getSentenceBoundaryEnd(text, dotIndex));
+                if (!nextChar) {
+                    return !textComplete;
+                }
+
+                return HARD_ABBREVIATIONS.has(abbreviation) ||
+                    CONTINUATION_START_PATTERN.test(nextChar);
             }
 
             function addSentence(sentences, paragraphText, paragraphStart, rawStart, rawEnd, textComplete) {
                 let start = rawStart;
                 let end = rawEnd;
 
-                while (start < end && /\s/.test(paragraphText[start])) {
+                while (start < end && WHITESPACE_PATTERN.test(paragraphText[start])) {
                     start += 1;
                 }
-                while (end > start && /\s/.test(paragraphText[end - 1])) {
+                while (end > start && WHITESPACE_PATTERN.test(paragraphText[end - 1])) {
                     end -= 1;
                 }
                 if (start >= end) {
@@ -600,37 +709,69 @@
                 return sentenceSegmenter;
             }
 
+            function shouldSplitAt(text, punctuationIndex, textComplete) {
+                const char = text[punctuationIndex];
+                return char !== '.' || !isAbbreviationPeriod(text, punctuationIndex, textComplete);
+            }
+
+            function mergeAbbreviationSegments(segments, text, textComplete) {
+                const merged = [];
+                for (const current of segments) {
+                    const previous = merged[merged.length - 1];
+                    const boundaryIndex = previous ? getLastBoundaryCharIndex(text, previous.end) : -1;
+
+                    if (previous && !shouldSplitAt(text, boundaryIndex, textComplete)) {
+                        previous.end = current.end;
+                    } else {
+                        merged.push({ ...current });
+                    }
+                }
+                return merged;
+            }
+
+            function splitByPunctuation(text, textComplete) {
+                const ranges = [];
+                let start = 0;
+                let index = 0;
+
+                while (index < text.length) {
+                    if (!SENTENCE_END_PATTERN.test(text[index])) {
+                        index += 1;
+                        continue;
+                    }
+
+                    const end = getSentenceBoundaryEnd(text, index);
+                    if (shouldSplitAt(text, index, textComplete)) {
+                        ranges.push({ start, end });
+                        start = end;
+                    }
+                    index = end;
+                }
+
+                if (start < text.length) {
+                    ranges.push({ start, end: text.length });
+                }
+                return ranges;
+            }
+
+            function getSentenceRanges(text, textComplete) {
+                const segmenter = getSentenceSegmenter();
+                if (!segmenter) {
+                    return splitByPunctuation(text, textComplete);
+                }
+
+                const ranges = Array.from(segmenter.segment(text), segment => ({
+                    start: segment.index,
+                    end: segment.index + segment.segment.length
+                }));
+                return mergeAbbreviationSegments(ranges, text, textComplete);
+            }
+
             function splitSentences(paragraphText, paragraphStart, textComplete) {
                 const sentences = [];
-                const segmenter = getSentenceSegmenter();
-
-                if (segmenter) {
-                    const segments = Array.from(segmenter.segment(paragraphText));
-                    for (const segment of segments) {
-                        addSentence(
-                            sentences,
-                            paragraphText,
-                            paragraphStart,
-                            segment.index,
-                            segment.index + segment.segment.length,
-                            textComplete
-                        );
-                    }
-                    return sentences;
+                for (const range of getSentenceRanges(paragraphText, textComplete)) {
+                    addSentence(sentences, paragraphText, paragraphStart, range.start, range.end, textComplete);
                 }
-
-                const sentenceEndPattern = /[。！？.!?]+["'”’）)\]】》」』]*/g;
-                let cursor = 0;
-                let match;
-                while ((match = sentenceEndPattern.exec(paragraphText)) !== null) {
-                    const end = match.index + match[0].length;
-                    addSentence(sentences, paragraphText, paragraphStart, cursor, end, textComplete);
-                    cursor = end;
-                }
-                if (cursor < paragraphText.length) {
-                    addSentence(sentences, paragraphText, paragraphStart, cursor, paragraphText.length, textComplete);
-                }
-
                 return sentences;
             }
 
