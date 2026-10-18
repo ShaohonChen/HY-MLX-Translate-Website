@@ -26,7 +26,7 @@ The project uses [Tencent Hunyuan Hy-MT2-1.8B](https://huggingface.co/tencent/Hy
 - 🍎 **Mac-friendly**: Runs completely locally and is fast on Apple M-series chips
 - 🌍 **Multi-language support**: Provides all 38 language options listed in the Hy-MT2 README
 - ⚡ **Streaming output**: Displays translation results in real-time without waiting for complete generation
-- 📝 **Reference translation**: Supports adding reference text to improve translation quality
+- 🧭 **Multiple translation modes**: Terminology, style, personalization, delimiter, structured-data, and background-aware translation
 - 📊 **Performance statistics**: Real-time display of Tokens count, total time, TTFT, TPOT and other performance indicators
 
 ## Technology Stack
@@ -89,68 +89,22 @@ After modification, devices within the same local area network can access it thr
 - Please pay attention to network security when exposing services externally, it is recommended to use in a trusted network environment
 - If you need to access it on the public network, it is recommended to use Nginx reverse proxy and configure HTTPS
 
-## API Interface Description
+## Web Translation Modes
 
-### 1. Get Supported Language List
+The web UI uses default translation unless another mode is selected. Each advanced mode shows its own guidance and required inputs:
 
-```http
-GET /api/languages
-```
+- **Terminology**: Add one or more source-term / preferred-translation pairs.
+- **Style**: Describe the required tone, writing style, or use case.
+- **Personalization**: Enter one translation preference per line.
+- **Delimiters**: Keep protected delimiters in the source text; no extra field is needed.
+- **Structured data**: Enter the actual format, such as JSON, XML, or YAML.
+- **Background information**: Provide context that helps disambiguate the source text.
 
-Response example:
-```json
-{
-  "model": "Hy-MT2-1.8B",
-  "language_count": 38,
-  "languages": {
-    "Chinese": "中文",
-    "English": "英语",
-    ...
-  },
-  "quick_langs": [
-    {"key": "Chinese", "label": "中文"},
-    {"key": "English", "label": "英文"}
-  ],
-  "modes": [
-    {"key": "default", "label": "普通翻译"},
-    {"key": "terminology", "label": "术语翻译"},
-    {"key": "style", "label": "风格翻译"},
-    {"key": "personalization", "label": "个性化翻译"},
-    {"key": "delimiters", "label": "保留分隔符"},
-    {"key": "structured_data", "label": "结构化数据"},
-    {"key": "structured_data_background", "label": "结构化数据+背景"}
-  ]
-}
-```
+The prompts follow the official task examples in `Hy-MT2-1.8B/README.md`.
 
-### 2. Translation Interface (Streaming Output)
+## API Interface
 
-```http
-POST /api/translate
-Content-Type: application/json
-
-{
-  "text": "Text to be translated",
-  "target_language": "Chinese",
-  "request_id": "1234567890",
-  "refer_text": "Reference text (optional)",
-  "mode": "default",
-  "mode_options": {}
-}
-```
-
-`mode` supports `default`, `terminology`, `style`, `personalization`, `delimiters`,
-`structured_data`, and `structured_data_background`. Mode-specific values are sent
-inside `mode_options`, for example `{"style": "formal and concise"}` or
-`{"format_type": "JSON"}`. If `mode` is omitted, it defaults to `default`; requests
-that only send `refer_text` remain compatible.
-
-The response uses Server-Sent Events (SSE) to return streaming data.
-Event types include model state (`status`), translated text chunks (`text`), inference errors (`error`), and performance data (`stats`).
-
-### 3. Translation Interface (Non-Streaming Output)
-
-Call this endpoint when a complete JSON response is preferred over streaming output:
+For developer use, the project exposes only a simple non-streaming default-translation interface. It waits for the complete translation and returns JSON. `target_language` must be a full English language name from the model README, such as `Chinese`, `English`, or `Japanese`.
 
 ```http
 POST /api/translate/sync
@@ -158,9 +112,7 @@ Content-Type: application/json
 
 {
   "text": "Hello, world.",
-  "target_language": "Chinese",
-  "mode": "default",
-  "mode_options": {}
+  "target_language": "Chinese"
 }
 ```
 
@@ -169,7 +121,6 @@ Response example:
 ```json
 {
   "model": "Hy-MT2-1.8B",
-  "mode": "default",
   "target_language": "Chinese",
   "translation": "你好，世界。",
   "stats": {
@@ -180,16 +131,7 @@ Response example:
 }
 ```
 
-### 4. Cancel Translation
-
-```http
-POST /api/cancel
-Content-Type: application/json
-
-{
-  "request_id": "1234567890"
-}
-```
+The web UI still uses SSE internally for streaming display and cancellation, but that internal protocol is not part of the public developer API.
 
 ## Acknowledgments
 

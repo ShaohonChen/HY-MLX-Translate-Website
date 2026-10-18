@@ -1,3 +1,5 @@
+let modeDefinitions = {};
+
 async function loadLanguages() {
             const select = document.getElementById('targetLanguage');
             const translateBtn = document.getElementById('translateBtn');
@@ -30,7 +32,11 @@ async function loadLanguages() {
                     option.title = mode.description || '';
                     modeSelect.appendChild(option);
                 }
+                modeDefinitions = Object.fromEntries(
+                    (data.modes || []).map(mode => [mode.key, mode])
+                );
                 modeSelect.value = 'default';
+                modeSelect.addEventListener('change', updateModeFields);
                 updateModeFields();
                 updateApiDocs(data);
 
@@ -68,7 +74,6 @@ async function loadLanguages() {
 
         function updateApiDocs(data) {
             const languageList = document.getElementById('apiLanguageList');
-            const modeList = document.getElementById('apiModeList');
             const requestExample = document.getElementById('apiRequestExample');
 
             languageList.innerHTML = '';
@@ -79,25 +84,11 @@ async function loadLanguages() {
                 languageList.appendChild(item);
             }
 
-            modeList.innerHTML = '';
-            for (const mode of data.modes || []) {
-                const item = document.createElement('div');
-                item.className = 'api-mode';
-                const key = document.createElement('strong');
-                key.textContent = mode.key;
-                const description = document.createElement('span');
-                description.textContent = `：${mode.label} · ${mode.description || ''}`;
-                item.append(key, description);
-                modeList.appendChild(item);
-            }
-
             const targetLanguage = data.quick_langs?.[0]?.key ||
                 Object.keys(data.languages || {})[0] || 'Chinese';
             const request = {
                 text: 'Hello, world.',
-                target_language: targetLanguage,
-                mode: 'default',
-                mode_options: {}
+                target_language: targetLanguage
             };
             requestExample.textContent = [
                 'curl -X POST http://127.0.0.1:5000/api/translate/sync \\',
@@ -136,50 +127,134 @@ async function loadLanguages() {
 
         function updateModeFields() {
             const mode = document.getElementById('translationMode').value;
-            const label = document.getElementById('modeOptionsLabel');
-            const textarea = document.getElementById('referText');
-            const formatType = document.getElementById('formatType');
+            const optionsPanel = document.getElementById('modeOptions');
+            const definition = modeDefinitions[mode] || modeDefinitions.default || {};
 
-            const fields = {
-                default: ['参考文本', '可选：提供术语、语境或参考译文'],
-                terminology: ['术语对照', '每行填写一条“原文 -> 译文”对应关系'],
-                style: ['翻译风格', '例如：正式、简洁、适合产品界面'],
-                personalization: ['个性化要求', '例如：使用简洁句式，保留专有名词'],
-                delimiters: ['补充说明', '此模式会自动要求保留分隔符'],
-                structured_data: ['结构化数据说明', '可选：补充需要遵守的格式或背景信息'],
-                structured_data_background: ['背景信息', '可选：提供结构化数据的背景信息']
-            };
-            const [labelText, placeholder] = fields[mode] || fields.default;
-            label.textContent = labelText;
-            textarea.placeholder = placeholder;
-            formatType.classList.toggle('visible', mode === 'structured_data');
+            clearError();
+            optionsPanel.classList.toggle('visible', mode !== 'default');
+            document.getElementById('modeOptionsTitle').textContent =
+                definition.label || '模式设置';
+            document.getElementById('modeDescription').textContent =
+                definition.description || '';
+
+            for (const field of optionsPanel.querySelectorAll('.mode-field')) {
+                field.classList.toggle('active', field.dataset.mode === mode);
+            }
+
+            if (mode === 'terminology' && !document.querySelector('.terminology-row')) {
+                addTerminologyRow();
+            }
         }
 
-        function toggleReference() {
-            const referenceBtn = document.getElementById('referenceBtn');
-            const referenceSection = document.getElementById('referenceSection');
-            const referText = document.getElementById('referText');
+        function addTerminologyRow(sourceValue = '', targetValue = '') {
+            const row = document.createElement('tr');
+            row.className = 'terminology-row';
 
-            referenceSection.classList.toggle('visible');
-            referenceBtn.classList.toggle('active');
-            referenceBtn.setAttribute(
-                'aria-expanded',
-                referenceSection.classList.contains('visible')
-            );
+            const sourceCell = document.createElement('td');
+            const sourceInput = document.createElement('input');
+            sourceInput.className = 'mode-input term-source';
+            sourceInput.type = 'text';
+            sourceInput.placeholder = '例如：machine learning';
+            sourceInput.setAttribute('aria-label', '原文术语');
+            sourceInput.value = sourceValue;
+            sourceCell.appendChild(sourceInput);
 
-            if (!referenceSection.classList.contains('visible')) {
-                referText.value = '';
+            const targetCell = document.createElement('td');
+            const targetInput = document.createElement('input');
+            targetInput.className = 'mode-input term-target';
+            targetInput.type = 'text';
+            targetInput.placeholder = '例如：机器学习';
+            targetInput.setAttribute('aria-label', '期望译文');
+            targetInput.value = targetValue;
+            targetCell.appendChild(targetInput);
+
+            const actionCell = document.createElement('td');
+            const removeButton = document.createElement('button');
+            removeButton.className = 'term-remove-btn';
+            removeButton.type = 'button';
+            removeButton.textContent = '删除';
+            removeButton.setAttribute('aria-label', '删除这组术语');
+            removeButton.addEventListener('click', () => {
+                const rows = document.querySelectorAll('.terminology-row');
+                if (rows.length === 1) {
+                    sourceInput.value = '';
+                    targetInput.value = '';
+                    sourceInput.focus();
+                } else {
+                    row.remove();
+                }
+            });
+            actionCell.appendChild(removeButton);
+
+            row.append(sourceCell, targetCell, actionCell);
+            document.getElementById('terminologyRows').appendChild(row);
+            if (sourceValue === '' && targetValue === '') {
+                sourceInput.focus();
             }
+        }
+
+        function collectModeOptions(mode) {
+            if (mode === 'terminology') {
+                const terminology = [];
+                let incompleteInput = null;
+                for (const row of document.querySelectorAll('.terminology-row')) {
+                    const sourceInput = row.querySelector('.term-source');
+                    const targetInput = row.querySelector('.term-target');
+                    const source = sourceInput.value.trim();
+                    const target = targetInput.value.trim();
+                    if ((source && !target) || (!source && target)) {
+                        incompleteInput = source ? targetInput : sourceInput;
+                        break;
+                    }
+                    if (source && target) {
+                        terminology.push({ source, target });
+                    }
+                }
+                if (incompleteInput || terminology.length === 0) {
+                    return {
+                        error: incompleteInput ? '请补全术语对照的原文和译文' : '请至少填写一组术语对照',
+                        focus: incompleteInput || document.querySelector('.term-source')
+                    };
+                }
+                return { options: { terminology } };
+            }
+
+            if (mode === 'style') {
+                const input = document.getElementById('styleInput');
+                const style = input.value.trim();
+                return style ? { options: { style } } :
+                    { error: '请填写目标风格', focus: input };
+            }
+
+            if (mode === 'personalization') {
+                const input = document.getElementById('preferencesInput');
+                const preferences = input.value.split(/\r?\n/)
+                    .map(item => item.trim()).filter(Boolean);
+                return preferences.length ? { options: { preferences } } :
+                    { error: '请至少填写一条翻译偏好', focus: input };
+            }
+
+            if (mode === 'structured_data') {
+                const input = document.getElementById('formatType');
+                const formatType = input.value.trim();
+                return formatType ? { options: { format_type: formatType } } :
+                    { error: '请填写结构化数据的格式', focus: input };
+            }
+
+            if (mode === 'background') {
+                const input = document.getElementById('backgroundInput');
+                const background = input.value.trim();
+                return background ? { options: { background } } :
+                    { error: '请填写背景信息', focus: input };
+            }
+
+            return { options: {} };
         }
 
         function removeLineBreaks() {
             const sourceText = document.getElementById('sourceText');
-            const referText = document.getElementById('referText');
 
             sourceText.value = sourceText.value.replace(/[\r\n]+/g, '');
-            if (referText.value) {
-                referText.value = referText.value.replace(/[\r\n]+/g, '');
-            }
             handleTextChanged('source');
         }
 
@@ -234,19 +309,9 @@ async function loadLanguages() {
         async function doTranslate() {
             const targetLanguage = document.getElementById('targetLanguage').value;
             const sourceText = document.getElementById('sourceText').value.trim();
-            const referText = document.getElementById('referText').value.trim();
             const mode = document.getElementById('translationMode').value || 'default';
-            const formatType = document.getElementById('formatType').value.trim();
-            const modeOptions = {};
-            if (mode === 'terminology') modeOptions.terminology = referText;
-            if (mode === 'style') modeOptions.style = referText;
-            if (mode === 'personalization') modeOptions.preferences = referText;
-            if (mode === 'structured_data' || mode === 'structured_data_background') {
-                modeOptions.format_type = formatType;
-            }
-            if (mode === 'structured_data_background') {
-                modeOptions.background = referText;
-            }
+            const modeResult = collectModeOptions(mode);
+            const modeOptions = modeResult.options || {};
             const btn = document.getElementById('translateBtn');
             const resultText = document.getElementById('resultText');
 
@@ -271,6 +336,14 @@ async function loadLanguages() {
                 return;
             }
 
+            if (modeResult.error) {
+                showError(modeResult.error);
+                resultTextComplete = true;
+                updateTextIndex('result');
+                modeResult.focus?.focus();
+                return;
+            }
+
             isTranslating = true;
             cancelRequested = false;
             autoScrollEnabled = true;
@@ -289,7 +362,6 @@ async function loadLanguages() {
                         text: sourceText,
                         target_language: targetLanguage,
                         request_id: currentRequestId,
-                        refer_text: referText,
                         mode,
                         mode_options: modeOptions
                     })

@@ -28,7 +28,7 @@
 - 🍎 **Mac设备友好**：完全在本地运行，并且在苹果M系列芯片上速度较快
 - 🌍 **多语言支持**：提供 Hy-MT2 README 所列的 38 个语言选项
 - ⚡ **流式输出**：实时展示翻译结果，无需等待完整生成
-- 📝 **参考翻译**：支持添加参考文本，提升翻译质量
+- 🧭 **多种翻译模式**：支持术语、风格、个性化、分隔符、结构化数据和背景信息翻译
 - 📊 **性能统计**：实时显示 Tokens 数、总耗时、TTFT、TPOT 等性能指标
 
 ## 技术栈
@@ -91,68 +91,22 @@ python app.py --host 0.0.0.0 --port 5000
 - 对外暴露服务时请注意网络安全，建议在可信网络环境中使用
 - 如需在公网访问，建议使用 Nginx 反向代理并配置 HTTPS
 
+## 网页翻译模式
+
+网页默认使用普通翻译。切换模式后，页面会显示该模式的说明和必要字段：
+
+- **术语翻译**：填写一组或多组“原文术语 / 期望译文”对照。
+- **风格翻译**：填写目标语气、文体或使用场景。
+- **个性化翻译**：每行填写一条翻译偏好。
+- **保留分隔符**：直接在原文中保留需要保护的分隔符，无需额外字段。
+- **结构化数据**：填写 JSON、XML、YAML 等实际数据格式。
+- **背景信息**：填写有助于理解原文的上下文。
+
+这些模式及其提示词均按照 `Hy-MT2-1.8B/README.md` 的官方任务示例实现。
+
 ## API 接口说明
 
-### 1. 获取支持的语言列表
-
-```http
-GET /api/languages
-```
-
-响应示例：
-```json
-{
-  "model": "Hy-MT2-1.8B",
-  "language_count": 38,
-  "languages": {
-    "Chinese": "中文",
-    "English": "英语",
-    ...
-  },
-  "quick_langs": [
-    {"key": "Chinese", "label": "中文"},
-    {"key": "English", "label": "英文"}
-  ],
-  "modes": [
-    {"key": "default", "label": "普通翻译"},
-    {"key": "terminology", "label": "术语翻译"},
-    {"key": "style", "label": "风格翻译"},
-    {"key": "personalization", "label": "个性化翻译"},
-    {"key": "delimiters", "label": "保留分隔符"},
-    {"key": "structured_data", "label": "结构化数据"},
-    {"key": "structured_data_background", "label": "结构化数据+背景"}
-  ]
-}
-```
-
-### 2. 翻译接口（流式输出）
-
-```http
-POST /api/translate
-Content-Type: application/json
-
-{
-  "text": "要翻译的文本",
-  "target_language": "Chinese",
-  "request_id": "1234567890",
-  "refer_text": "参考文本（可选）",
-  "mode": "default",
-  "mode_options": {}
-}
-```
-
-`mode` 支持 `default`、`terminology`、`style`、`personalization`、`delimiters`、
-`structured_data` 和 `structured_data_background`。不同模式的附加参数放在
-`mode_options` 中，例如 `style` 使用 `{"style": "正式、简洁"}`，结构化数据使用
-`{"format_type": "JSON"}`。省略 `mode` 时默认为 `default`，现有只提交
-`refer_text` 的调用仍然兼容。
-
-响应使用 Server-Sent Events (SSE) 流式返回。
-事件类型包括模型状态 `status`、译文片段 `text`、推理错误 `error` 和性能数据 `stats`。
-
-### 3. 翻译接口（非流式输出）
-
-如果调用方不需要流式结果，可以使用以下接口。接口会等待模型生成完成后返回一个 JSON 响应：
+面向开发者只提供普通模式的非流式翻译接口，避免引入网页高级模式的参数组合。接口会等待模型生成完成后返回 JSON；`target_language` 使用模型 README 中的完整英文语言名，例如 `Chinese`、`English`、`Japanese`。
 
 ```http
 POST /api/translate/sync
@@ -160,9 +114,7 @@ Content-Type: application/json
 
 {
   "text": "Hello, world.",
-  "target_language": "Chinese",
-  "mode": "default",
-  "mode_options": {}
+  "target_language": "Chinese"
 }
 ```
 
@@ -171,7 +123,6 @@ Content-Type: application/json
 ```json
 {
   "model": "Hy-MT2-1.8B",
-  "mode": "default",
   "target_language": "Chinese",
   "translation": "你好，世界。",
   "stats": {
@@ -182,16 +133,7 @@ Content-Type: application/json
 }
 ```
 
-### 4. 取消翻译
-
-```http
-POST /api/cancel
-Content-Type: application/json
-
-{
-  "request_id": "1234567890"
-}
-```
+网页内部仍使用 SSE 实现流式显示和取消操作，但这部分不作为对外开发者接口。
 
 ## 致谢
 

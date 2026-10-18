@@ -32,6 +32,7 @@ body {
 
 button,
 select,
+input,
 textarea {
     font: inherit;
 }
@@ -116,21 +117,6 @@ h1 {
 .mode-select-wrapper {
     width: min(180px, 100%);
     min-width: 150px;
-}
-
-.mode-format-input {
-    display: none;
-    width: 100%;
-    height: 36px;
-    padding: 0 11px;
-    background: var(--surface);
-    color: var(--text);
-    border: 1px solid var(--line-strong);
-    border-radius: 8px;
-}
-
-.mode-format-input.visible {
-    display: block;
 }
 
 select {
@@ -219,39 +205,174 @@ select:focus {
     border-color: var(--danger);
 }
 
-.btn-reference {
+.btn-secondary {
     background: var(--surface);
     color: #4f5660;
     border-color: var(--line-strong);
 }
 
-.btn-reference:hover,
-.btn-reference.active {
+.btn-secondary:hover {
     background: #eef1f5;
     color: var(--text);
     border-color: #adb5c1;
 }
 
-.reference-section {
+.mode-options {
     display: none;
     grid-column: 1 / -1;
-    flex-direction: column;
-    gap: 8px;
-    padding-top: 2px;
-}
-
-.reference-section.visible {
-    display: flex;
-}
-
-.reference-textarea {
-    min-height: 92px;
-    max-height: 180px;
-    padding: 12px 14px;
+    gap: 12px;
+    padding: 14px;
     background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.mode-options.visible {
+    display: grid;
+}
+
+.mode-options-heading h2 {
+    color: #30343a;
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.mode-options-heading p,
+.field-help {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.mode-field {
+    display: none;
+}
+
+.mode-field.active {
+    display: grid;
+    gap: 8px;
+}
+
+.field-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.required-mark {
+    color: var(--danger);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.btn-text,
+.term-remove-btn {
+    padding: 3px 7px;
+    background: transparent;
+    border: 0;
+    border-radius: 5px;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.btn-text:hover,
+.term-remove-btn:hover {
+    background: #eef3ff;
+}
+
+.term-remove-btn {
+    color: var(--danger);
+}
+
+.term-remove-btn:hover {
+    background: #fff0f2;
+}
+
+.mode-input,
+.mode-textarea {
+    width: 100%;
+    padding: 9px 11px;
+    background: var(--surface);
+    color: var(--text);
     border: 1px solid var(--line-strong);
     border-radius: 8px;
+    font-size: 14px;
+}
+
+.mode-input {
+    height: 38px;
+}
+
+.mode-textarea {
+    min-height: 92px;
+    max-height: 180px;
     resize: vertical;
+    line-height: 1.55;
+}
+
+.mode-input:focus,
+.mode-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(36, 87, 214, 0.12);
+}
+
+.terminology-table-wrapper {
+    overflow-x: auto;
+}
+
+.terminology-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.terminology-table th {
+    padding: 0 8px 5px 0;
+    color: #626873;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: left;
+}
+
+.terminology-table th:last-child,
+.terminology-table td:last-child {
+    width: 54px;
+    padding-right: 0;
+    text-align: right;
+}
+
+.terminology-table td {
+    padding: 4px 8px 4px 0;
+}
+
+.mode-notice {
+    padding: 10px 12px;
+    color: #4d5560;
+    background: #f5f7fb;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.mode-notice code {
+    color: #344054;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 .main-content {
@@ -468,29 +589,18 @@ textarea[readonly] {
     font-size: 12px;
 }
 
-.api-tag-list,
-.api-mode-list {
+.api-tag-list {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
 }
 
-.api-tag,
-.api-mode {
+.api-tag {
     padding: 4px 7px;
     border: 1px solid var(--line);
     border-radius: 6px;
     background: var(--surface);
     font-size: 12px;
-}
-
-.api-mode strong {
-    color: #344054;
-    font-weight: 650;
-}
-
-.api-mode span {
-    color: var(--muted);
 }
 
 .api-code-block {
@@ -611,7 +721,11 @@ textarea[readonly] {
     }
 
     #translateBtn {
-        grid-column: 1 / -1;
+        grid-column: auto;
+    }
+
+    .terminology-table {
+        min-width: 520px;
     }
 
     .main-content {

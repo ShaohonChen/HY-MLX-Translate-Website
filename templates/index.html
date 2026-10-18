@@ -33,15 +33,59 @@
                     </div>
                 </div>
                 <div class="action-section">
-                    <button class="btn btn-reference" id="referenceBtn" type="button" aria-expanded="false" aria-controls="referenceSection" onclick="toggleReference()">添加参考</button>
-                    <button class="btn btn-reference" id="removeBreaksBtn" type="button" onclick="removeLineBreaks()">整理换行</button>
+                    <button class="btn btn-secondary" id="removeBreaksBtn" type="button" onclick="removeLineBreaks()">整理换行</button>
                     <button class="btn" id="translateBtn" type="button" onclick="handleButtonClick()">翻译</button>
                 </div>
-                <div class="reference-section" id="referenceSection">
-                    <label class="section-title" id="modeOptionsLabel" for="referText">参考文本</label>
-                    <input id="formatType" class="mode-format-input" type="text" placeholder="格式类型，例如 JSON、XML">
-                    <textarea id="referText" class="reference-textarea" placeholder="可选：提供术语、语境或参考译文"></textarea>
-                </div>
+                <section class="mode-options" id="modeOptions" aria-live="polite">
+                    <div class="mode-options-heading">
+                        <h2 id="modeOptionsTitle">模式设置</h2>
+                        <p id="modeDescription"></p>
+                    </div>
+
+                    <div class="mode-field" data-mode="terminology">
+                        <div class="field-label-row">
+                            <label class="section-title">术语对照 <span class="required-mark">必填</span></label>
+                            <button class="btn-text" type="button" onclick="addTerminologyRow()">+ 添加术语</button>
+                        </div>
+                        <p class="field-help">请分别填写原文术语和期望译法。至少需要一组完整对照。</p>
+                        <div class="terminology-table-wrapper">
+                            <table class="terminology-table">
+                                <thead>
+                                    <tr><th>原文术语</th><th>期望译文</th><th><span class="sr-only">操作</span></th></tr>
+                                </thead>
+                                <tbody id="terminologyRows"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="mode-field" data-mode="style">
+                        <label class="section-title" for="styleInput">目标风格 <span class="required-mark">必填</span></label>
+                        <p class="field-help">描述译文的语气、文体或场景，尽量具体且避免互相冲突。</p>
+                        <input id="styleInput" class="mode-input" type="text" placeholder="例如：正式、简洁，适合商务邮件">
+                    </div>
+
+                    <div class="mode-field" data-mode="personalization">
+                        <label class="section-title" for="preferencesInput">翻译偏好 <span class="required-mark">必填</span></label>
+                        <p class="field-help">每行填写一条要求，模型会按顺序执行。</p>
+                        <textarea id="preferencesInput" class="mode-textarea" placeholder="例如：&#10;使用简洁句式&#10;保留产品名 Hy-MT2&#10;将 user 统一译为“用户”"></textarea>
+                    </div>
+
+                    <div class="mode-field" data-mode="delimiters">
+                        <p class="mode-notice">请在原文中保留需要保护的分隔符，例如 <code>&lt;sep&gt;</code>、<code>|||</code> 或 <code>##</code>。模型会被要求原样保留符号的数量和位置，无需填写额外信息。</p>
+                    </div>
+
+                    <div class="mode-field" data-mode="structured_data">
+                        <label class="section-title" for="formatType">数据格式 <span class="required-mark">必填</span></label>
+                        <p class="field-help">填写原文的实际格式；模型只翻译面向用户的值，并保留结构、键名和占位符。</p>
+                        <input id="formatType" class="mode-input" type="text" placeholder="例如：JSON、XML、YAML、HTML">
+                    </div>
+
+                    <div class="mode-field" data-mode="background">
+                        <label class="section-title" for="backgroundInput">背景信息 <span class="required-mark">必填</span></label>
+                        <p class="field-help">补充人物、场景、行业或上下文，帮助模型消除歧义。不要在这里重复待翻译原文。</p>
+                        <textarea id="backgroundInput" class="mode-textarea" placeholder="例如：这是一封软件团队写给客户的故障恢复通知，语气需要专业且诚恳。"></textarea>
+                    </div>
+                </section>
             </div>
 
             <div class="main-content">
@@ -108,10 +152,10 @@
         </details>
 
         <details class="api-docs" id="apiDocs">
-            <summary>API 调用说明 <span class="details-hint">支持语言、模式与非流式示例</span></summary>
+            <summary>API 调用说明 <span class="details-hint">普通翻译 · 非流式 JSON</span></summary>
             <div class="api-docs-content">
                 <p class="api-docs-intro">
-                    面向内网调用者提供一个简单的 JSON 接口。该接口等待完整译文生成后一次性返回。
+                    面向内网调用者提供一个简单的普通翻译接口。该接口等待完整译文生成后一次性返回，不开放网页中的高级模式。
                 </p>
 
                 <section class="api-doc-section">
@@ -125,11 +169,6 @@
                 </section>
 
                 <section class="api-doc-section">
-                    <h2>支持模式</h2>
-                    <div id="apiModeList" class="api-mode-list">加载中...</div>
-                </section>
-
-                <section class="api-doc-section">
                     <h2>调用案例</h2>
                     <pre id="apiRequestExample" class="api-code-block"></pre>
                 </section>
@@ -138,7 +177,6 @@
                     <h2>响应案例</h2>
                     <pre class="api-code-block">{
   "model": "Hy-MT2-1.8B",
-  "mode": "default",
   "target_language": "Chinese",
   "translation": "你好，世界。",
   "stats": {

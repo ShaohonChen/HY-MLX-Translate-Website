@@ -86,12 +86,11 @@ def load_model():
                 app.logger.info("%s 加载成功", MODEL_NAME)
 
 
-def parse_translation_request(data):
+def parse_translation_request(data, allow_advanced_modes=True):
     """Validate a translation payload and build its model prompt."""
     data = data if isinstance(data, dict) else {}
     source_text = data.get('text', '')
     target_language = data.get('target_language', '')
-    refer_text = data.get('refer_text', '')
     mode = data.get('mode', 'default')
     mode_options = data.get('mode_options', {})
     request_id = str(data.get('request_id') or uuid4())
@@ -102,14 +101,14 @@ def parse_translation_request(data):
     if target_language not in support_lang_map:
         return None, ({'error': f'不支持的目标语言：{target_language}'}, 400)
 
-    if not isinstance(refer_text, str):
-        return None, ({'error': '参考文本必须是字符串'}, 400)
-
     if not isinstance(mode, str):
         return None, ({'error': '翻译模式必须是字符串'}, 400)
 
     if not isinstance(mode_options, dict):
         return None, ({'error': 'mode_options 必须是对象'}, 400)
+
+    if not allow_advanced_modes and (mode != 'default' or mode_options):
+        return None, ({'error': '非流式 API 仅支持普通翻译'}, 400)
 
     try:
         prompt = build_prompt(
@@ -118,7 +117,6 @@ def parse_translation_request(data):
             support_lang_map,
             mode=mode,
             mode_options=mode_options,
-            refer_text=refer_text,
         )
     except ValueError as error:
         return None, ({'error': str(error)}, 400)
@@ -255,7 +253,9 @@ def translate():
 @app.route('/api/translate/sync', methods=['POST'])
 def translate_sync():
     """Return one complete translation as a regular JSON response."""
-    params, error = parse_translation_request(request.get_json(silent=True))
+    params, error = parse_translation_request(
+        request.get_json(silent=True), allow_advanced_modes=False,
+    )
     if error is not None:
         body, status = error
         return jsonify(body), status
@@ -290,7 +290,6 @@ def translate_sync():
     total_time = time.perf_counter() - start_time
     return jsonify({
         'model': MODEL_NAME,
-        'mode': params['mode'],
         'target_language': params['target_language'],
         'translation': response_text,
         'stats': {
