@@ -18,6 +18,8 @@ The project uses [Tencent Hunyuan Hy-MT2-1.8B](https://huggingface.co/tencent/Hy
 
 ## Recent Updates
 
+- 🧭 Added guided modes based on the official task examples: terminology uses a pair table, while the other modes show only the style, preference, format, or background fields they need. The old “Add Reference” workflow has been removed.
+- 🔌 Simplified the public API to a non-streaming JSON endpoint for default translation; the web UI keeps its internal SSE streaming experience.
 - 🚀 Upgraded the inference model to Hy-MT2-1.8B with its official prompts, chat template, and recommended sampling parameters
 - ✨ Added "Remove Line Breaks" button to instantly remove all line breaks from input text, solving the issue of excessive intermittent line breaks when copying and pasting content
 
