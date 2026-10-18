@@ -112,6 +112,15 @@ GET /api/languages
   "quick_langs": [
     {"key": "Chinese", "label": "中文"},
     {"key": "English", "label": "英文"}
+  ],
+  "modes": [
+    {"key": "default", "label": "普通翻译"},
+    {"key": "terminology", "label": "术语翻译"},
+    {"key": "style", "label": "风格翻译"},
+    {"key": "personalization", "label": "个性化翻译"},
+    {"key": "delimiters", "label": "保留分隔符"},
+    {"key": "structured_data", "label": "结构化数据"},
+    {"key": "structured_data_background", "label": "结构化数据+背景"}
   ]
 }
 ```
@@ -126,14 +135,54 @@ Content-Type: application/json
   "text": "要翻译的文本",
   "target_language": "Chinese",
   "request_id": "1234567890",
-  "refer_text": "参考文本（可选）"
+  "refer_text": "参考文本（可选）",
+  "mode": "default",
+  "mode_options": {}
 }
 ```
+
+`mode` 支持 `default`、`terminology`、`style`、`personalization`、`delimiters`、
+`structured_data` 和 `structured_data_background`。不同模式的附加参数放在
+`mode_options` 中，例如 `style` 使用 `{"style": "正式、简洁"}`，结构化数据使用
+`{"format_type": "JSON"}`。省略 `mode` 时默认为 `default`，现有只提交
+`refer_text` 的调用仍然兼容。
 
 响应使用 Server-Sent Events (SSE) 流式返回。
 事件类型包括模型状态 `status`、译文片段 `text`、推理错误 `error` 和性能数据 `stats`。
 
-### 3. 取消翻译
+### 3. 翻译接口（非流式输出）
+
+如果调用方不需要流式结果，可以使用以下接口。接口会等待模型生成完成后返回一个 JSON 响应：
+
+```http
+POST /api/translate/sync
+Content-Type: application/json
+
+{
+  "text": "Hello, world.",
+  "target_language": "Chinese",
+  "mode": "default",
+  "mode_options": {}
+}
+```
+
+响应示例：
+
+```json
+{
+  "model": "Hy-MT2-1.8B",
+  "mode": "default",
+  "target_language": "Chinese",
+  "translation": "你好，世界。",
+  "stats": {
+    "token_count": 5,
+    "prompt_tokens": 28,
+    "total_time": 1.2345
+  }
+}
+```
+
+### 4. 取消翻译
 
 ```http
 POST /api/cancel

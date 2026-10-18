@@ -110,6 +110,15 @@ Response example:
   "quick_langs": [
     {"key": "Chinese", "label": "中文"},
     {"key": "English", "label": "英文"}
+  ],
+  "modes": [
+    {"key": "default", "label": "普通翻译"},
+    {"key": "terminology", "label": "术语翻译"},
+    {"key": "style", "label": "风格翻译"},
+    {"key": "personalization", "label": "个性化翻译"},
+    {"key": "delimiters", "label": "保留分隔符"},
+    {"key": "structured_data", "label": "结构化数据"},
+    {"key": "structured_data_background", "label": "结构化数据+背景"}
   ]
 }
 ```
@@ -124,14 +133,54 @@ Content-Type: application/json
   "text": "Text to be translated",
   "target_language": "Chinese",
   "request_id": "1234567890",
-  "refer_text": "Reference text (optional)"
+  "refer_text": "Reference text (optional)",
+  "mode": "default",
+  "mode_options": {}
 }
 ```
+
+`mode` supports `default`, `terminology`, `style`, `personalization`, `delimiters`,
+`structured_data`, and `structured_data_background`. Mode-specific values are sent
+inside `mode_options`, for example `{"style": "formal and concise"}` or
+`{"format_type": "JSON"}`. If `mode` is omitted, it defaults to `default`; requests
+that only send `refer_text` remain compatible.
 
 The response uses Server-Sent Events (SSE) to return streaming data.
 Event types include model state (`status`), translated text chunks (`text`), inference errors (`error`), and performance data (`stats`).
 
-### 3. Cancel Translation
+### 3. Translation Interface (Non-Streaming Output)
+
+Call this endpoint when a complete JSON response is preferred over streaming output:
+
+```http
+POST /api/translate/sync
+Content-Type: application/json
+
+{
+  "text": "Hello, world.",
+  "target_language": "Chinese",
+  "mode": "default",
+  "mode_options": {}
+}
+```
+
+Response example:
+
+```json
+{
+  "model": "Hy-MT2-1.8B",
+  "mode": "default",
+  "target_language": "Chinese",
+  "translation": "你好，世界。",
+  "stats": {
+    "token_count": 5,
+    "prompt_tokens": 28,
+    "total_time": 1.2345
+  }
+}
+```
+
+### 4. Cancel Translation
 
 ```http
 POST /api/cancel
