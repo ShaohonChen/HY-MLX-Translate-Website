@@ -1,6 +1,6 @@
-# HY-MLX-Translator - Hunyuan 1.8B Model Local Translation Assistant for Mac
+# HY-MLX-Translator - Hy-MT2-1.8B Local Translation Assistant for Mac
 
-> A local translation website deployed on Apple Silicon Mac using MLX, based on Tencent Hunyuan 1.8B model. Supports streaming translation results for real-time translation experience.
+> A local translation website for Apple Silicon Macs, powered by Tencent Hunyuan Hy-MT2-1.8B and MLX. It streams translation results for a responsive translation experience.
 > ⚠️ 99% of this project's code is implemented by vibe coding! There may be some bugs or imperfections. Please use with caution.
 
 <p align="center">
@@ -9,7 +9,7 @@
 
 Since Google Translate often doesn't work properly due to network issues, I decided to create a local translation assistant. Since I use a Mac computer, I adopted the [MLX-LM framework](https://github.com/MLX-LM/MLX-LM) as the inference engine to accelerate LLM running speed on Mac.
 
-For model selection, I chose the [Tencent Hunyuan 1.8B model](https://huggingface.co/tencent/HY-MT1.5-1.8B) because it claims on Huggingface to have excellent translation performance, with the original statement being "achieving industry-leading level among models of the same scale, surpassing most commercial translation APIs" (I haven't compared it with other models of the same parameters). Subjectively, this model can provide high-quality translation results in paper translation scenarios.
+The project uses [Tencent Hunyuan Hy-MT2-1.8B](https://huggingface.co/tencent/Hy-MT2-1.8B), a multilingual translation model optimized for complex real-world scenarios and translation instruction following. Inference follows the model's official prompt format and recommended sampling parameters.
 
 |  |
 |:--:|
@@ -18,12 +18,13 @@ For model selection, I chose the [Tencent Hunyuan 1.8B model](https://huggingfac
 
 ## Recent Updates
 
+- 🚀 Upgraded the inference model to Hy-MT2-1.8B with its official prompts, chat template, and recommended sampling parameters
 - ✨ Added "Remove Line Breaks" button to instantly remove all line breaks from input text, solving the issue of excessive intermittent line breaks when copying and pasting content
 
 ## Project Features
 
 - 🍎 **Mac-friendly**: Runs completely locally and is fast on Apple M-series chips
-- 🌍 **Multi-language support**: Supports translation in 33 languages (of course, mainly thanks to Hunyuan's excellence)
+- 🌍 **Multi-language support**: Provides all 38 language options listed in the Hy-MT2 README
 - ⚡ **Streaming output**: Displays translation results in real-time without waiting for complete generation
 - 📝 **Reference translation**: Supports adding reference text to improve translation quality
 - 📊 **Performance statistics**: Real-time display of Tokens count, total time, TTFT, TPOT and other performance indicators
@@ -32,7 +33,7 @@ For model selection, I chose the [Tencent Hunyuan 1.8B model](https://huggingfac
 
 - **Backend**: Flask + Flask-CORS
 - **Framework**: MLX-LM (Apple Silicon optimized)
-- **Model**: HY-MT1.5-1.8B (Tencent Hunyuan)
+- **Model**: Hy-MT2-1.8B (Tencent Hunyuan)
 - **Frontend**: Native HTML + CSS + JavaScript
 
 ## Local Running Steps
@@ -49,7 +50,7 @@ pip install flask flask-cors mlx-lm
 bash download_model.sh
 ```
 
-This script will download the `tencent/HY-MT1.5-1.8B` model from HuggingFace to the local `HY-MT1.5-1.8B/` directory.
+The script downloads `tencent/Hy-MT2-1.8B` from Hugging Face when available, falls back to ModelScope, and saves it to `Hy-MT2-1.8B/`.
 
 ### 3. Start Service
 
@@ -70,6 +71,7 @@ python app.py --host 0.0.0.0 --port 8080
 Parameter description:
 - `--host`: Specify listening address (default: `127.0.0.1`)
 - `--port`: Specify port number (default: `5000`)
+- `--debug`: Enable Flask debug mode (disabled by default)
 
 ## Exposing Service Externally
 
@@ -83,7 +85,7 @@ After modification, devices within the same local area network can access it thr
 
 ### ⚠️ Security Reminder
 
-- `debug=True` is only for development environments, please set to `False` for production environments
+- Debug mode is intended for development only; do not pass `--debug` in production
 - Please pay attention to network security when exposing services externally, it is recommended to use in a trusted network environment
 - If you need to access it on the public network, it is recommended to use Nginx reverse proxy and configure HTTPS
 
@@ -98,6 +100,8 @@ GET /api/languages
 Response example:
 ```json
 {
+  "model": "Hy-MT2-1.8B",
+  "language_count": 38,
   "languages": {
     "Chinese": "中文",
     "English": "英语",
@@ -125,6 +129,7 @@ Content-Type: application/json
 ```
 
 The response uses Server-Sent Events (SSE) to return streaming data.
+Event types include model state (`status`), translated text chunks (`text`), inference errors (`error`), and performance data (`stats`).
 
 ### 3. Cancel Translation
 
@@ -139,10 +144,10 @@ Content-Type: application/json
 
 ## Acknowledgments
 
-- Model: Tencent Hunyuan [HY-MT1.5-1.8B](https://huggingface.co/tencent/HY-MT1.5-1.8B)
+- Model: Tencent Hunyuan [Hy-MT2-1.8B](https://huggingface.co/tencent/Hy-MT2-1.8B)
 - Inference framework: [MLX-LM](https://github.com/ml-explore/mlx-lm)
 - Code: [Doubao](https://www.doubao.com/chat/)
 
 ## License
 
-Please refer to the License.txt file of the HY-MT1.5-1.8B model.
+See `Hy-MT2-1.8B/LICENSE.txt`.

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>混元翻译助手</title>
+    <title>Hy-MT2 本地翻译助手</title>
     <style>
         * {
             margin: 0;
@@ -23,9 +23,16 @@
         h1 {
             text-align: center;
             color: #111;
-            margin-bottom: 24px;
+            margin-bottom: 6px;
             font-size: 24px;
             font-weight: 600;
+        }
+
+        .model-info {
+            margin-bottom: 24px;
+            text-align: center;
+            color: #666;
+            font-size: 13px;
         }
 
         .controls {
@@ -339,10 +346,37 @@
             color: #333;
             text-decoration: underline;
         }
+
+        @media (max-width: 760px) {
+            body {
+                padding: 16px;
+            }
+
+            .stats-panel {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .language-section,
+            .language-selector,
+            .action-section {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            textarea,
+            .text-match-box {
+                min-height: 300px;
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>混元1.8B模型Mac本地翻译助手</h1>
+    <h1 id="pageTitle">Hy-MT2-1.8B Mac 本地翻译助手</h1>
+    <p id="modelInfo" class="model-info">本地运行 · MLX 加速 · 流式翻译</p>
 
     <div id="stats" class="stats-panel">
         <div class="stat-item">
@@ -424,21 +458,29 @@
 	        </div>
 	    </div>
 
-    <div id="error" style="display: none;" class="error"></div>
+    <div id="error" style="display: none;" class="error" role="alert" aria-live="polite"></div>
 
     <div class="footer">
         作者：ShaohonChen |
         <a href="https://github.com/ShaohonChen/HY-MLX-Translator" target="_blank">GitHub</a><br>
-        鸣谢：豆包和codex帮我写了所有代码、混元提供了翻译模型技术
+        鸣谢：豆包和 Codex 协助编写代码、腾讯混元提供翻译模型技术<br>
+        模型：<a href="https://huggingface.co/tencent/Hy-MT2-1.8B" target="_blank">腾讯混元 Hy-MT2-1.8B</a>
     </div>
 
     <script>
         async function loadLanguages() {
+            const select = document.getElementById('targetLanguage');
+            const translateBtn = document.getElementById('translateBtn');
+            select.disabled = true;
+            translateBtn.disabled = true;
+
             try {
                 const response = await fetch('/api/languages');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 const data = await response.json();
 
-                const select = document.getElementById('targetLanguage');
                 select.innerHTML = '';
 
                 // 填充语言下拉选择
@@ -468,9 +510,29 @@
                     select.value = Object.keys(data.languages)[0];
                 }
                 updateQuickLangButtons();
+                document.getElementById('pageTitle').textContent = `${data.model} Mac 本地翻译助手`;
+                document.getElementById('modelInfo').textContent =
+                    `${data.language_count} 个语言选项 · 本地运行 · MLX 加速 · 流式翻译`;
             } catch (error) {
                 console.error('加载语言列表失败:', error);
+                select.innerHTML = '<option value="">语言列表加载失败</option>';
+                showError('语言列表加载失败，请确认后端服务正常后刷新页面');
+            } finally {
+                select.disabled = select.options.length === 0 || !select.value;
+                translateBtn.disabled = select.disabled;
             }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function clearError() {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = '';
+            errorDiv.style.display = 'none';
         }
 
         function selectLanguage(lang) {
@@ -502,16 +564,16 @@
             }
         }
 
-            function removeLineBreaks() {
-                const sourceText = document.getElementById('sourceText');
-                const referText = document.getElementById('referText');
+        function removeLineBreaks() {
+            const sourceText = document.getElementById('sourceText');
+            const referText = document.getElementById('referText');
 
-                sourceText.value = sourceText.value.replace(/[\r\n]+/g, '');
-                if (referText.value) {
-                    referText.value = referText.value.replace(/[\r\n]+/g, '');
-                }
-                handleTextChanged('source');
+            sourceText.value = sourceText.value.replace(/[\r\n]+/g, '');
+            if (referText.value) {
+                referText.value = referText.value.replace(/[\r\n]+/g, '');
             }
+            handleTextChanged('source');
+        }
 
         function resetStats() {
             document.getElementById('stat-token-count').textContent = '0';
@@ -525,13 +587,14 @@
         }
 
         let currentRequestId = null;
-            let currentReader = null;
-            let isTranslating = false;
-            let autoScrollEnabled = true;
-            let resultTextComplete = true;
-            let activeSelectionSide = null;
-            let selectionTimer = null;
-            let sentenceSegmenter = null;
+        let currentReader = null;
+        let isTranslating = false;
+        let cancelRequested = false;
+        let autoScrollEnabled = true;
+        let resultTextComplete = true;
+        let activeSelectionSide = null;
+        let selectionTimer = null;
+        let sentenceSegmenter = null;
 
             const sourceTextarea = document.getElementById('sourceText');
             const resultTextarea = document.getElementById('resultText');
@@ -993,11 +1056,33 @@
                 clearHighlights();
             }
 
-            function handleButtonClick() {
-                if (isTranslating) {
-                    cancelTranslate();
+        function handleButtonClick() {
+            if (isTranslating) {
+                cancelTranslate();
             } else {
                 doTranslate();
+            }
+        }
+
+        function updateStats(stats) {
+            document.getElementById('stat-token-count').textContent = stats.token_count;
+            document.getElementById('stat-prompt-tokens').textContent = stats.prompt_tokens;
+            document.getElementById('stat-complete-tokens').textContent = stats.complete_tokens;
+            document.getElementById('stat-prefill-speed').textContent = stats.prefill_speed;
+            document.getElementById('stat-complete-speed').textContent = stats.complete_speed;
+            document.getElementById('stat-total-time').textContent = stats.total_time;
+            document.getElementById('stat-ttft').textContent = stats.ttft;
+            document.getElementById('stat-tpot').textContent = stats.avg_tpot;
+        }
+
+        function updateTranslationStatus(status, btn) {
+            const labels = {
+                loading_model: '正在加载模型 (Loading Model)...',
+                waiting_inference: '等待推理 (Waiting)...',
+                translating: '翻译中 (Translating)...'
+            };
+            if (!cancelRequested && labels[status]) {
+                btn.innerHTML = `<span class="loading"></span>${labels[status]}`;
             }
         }
 
@@ -1007,34 +1092,33 @@
             const referText = document.getElementById('referText').value.trim();
             const btn = document.getElementById('translateBtn');
             const resultText = document.getElementById('resultText');
-                const errorDiv = document.getElementById('error');
 
-                resultText.value = '';
-                resultTextComplete = false;
-                updateAllTextIndexes();
-                clearHighlights();
-                errorDiv.style.display = 'none';
-                resetStats();
+            resultText.value = '';
+            resultTextComplete = false;
+            updateAllTextIndexes();
+            clearHighlights();
+            clearError();
+            resetStats();
 
-                if (!sourceText) {
-                    errorDiv.textContent = '请输入要翻译的文本';
-                    errorDiv.style.display = 'block';
-                    resultTextComplete = true;
-                    updateTextIndex('result');
-                    return;
-                }
+            if (!sourceText) {
+                showError('请输入要翻译的文本');
+                resultTextComplete = true;
+                updateTextIndex('result');
+                return;
+            }
 
-                if (!targetLanguage) {
-                    errorDiv.textContent = '请选择目标语言';
-                    errorDiv.style.display = 'block';
-                    resultTextComplete = true;
-                    updateTextIndex('result');
-                    return;
-                }
+            if (!targetLanguage) {
+                showError('请选择目标语言');
+                resultTextComplete = true;
+                updateTextIndex('result');
+                return;
+            }
 
             isTranslating = true;
+            cancelRequested = false;
             autoScrollEnabled = true;
-            currentRequestId = Date.now().toString();
+            currentRequestId = window.crypto?.randomUUID?.() ||
+                `${Date.now()}-${Math.random().toString(16).slice(2)}`;
             btn.innerHTML = '<span class="loading"></span>翻译中 (Translating)...';
             btn.classList.add('btn-cancel');
 
@@ -1053,71 +1137,83 @@
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    errorDiv.textContent = errorData.error || '翻译失败';
-                    errorDiv.style.display = 'block';
+                    const errorData = await response.json().catch(() => ({}));
+                    showError(errorData.error || `翻译失败（HTTP ${response.status}）`);
                     return;
+                }
+                if (!response.body) {
+                    throw new Error('浏览器不支持流式响应');
                 }
 
                 currentReader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let buffer = '';
-                let stats = null;
+                let streamFailed = false;
+
+                const processFrame = frame => {
+                    const dataLine = frame.split('\n').find(line => line.startsWith('data: '));
+                    if (!dataLine) {
+                        return;
+                    }
+                    try {
+                        const data = JSON.parse(dataLine.slice(6));
+                        if (data.type === 'text') {
+                            resultText.value += data.content;
+                            updateTextIndex('result');
+                            refreshActiveHighlight();
+                            if (autoScrollEnabled) {
+                                resultText.scrollTop = resultText.scrollHeight;
+                                syncHighlightScroll('result');
+                            }
+                        } else if (data.type === 'status') {
+                            updateTranslationStatus(data.content, btn);
+                        } else if (data.type === 'error') {
+                            streamFailed = true;
+                            showError(data.content || '模型推理失败');
+                        } else if (data.type === 'stats') {
+                            updateStats(data.content);
+                        }
+                    } catch (error) {
+                        console.error('解析流式数据失败:', error, frame);
+                    }
+                };
 
                 while (true) {
                     const { done, value } = await currentReader.read();
-                    if (done) break;
+                    if (done) {
+                        buffer += decoder.decode();
+                        break;
+                    }
 
                     buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n\n');
-                    buffer = lines.pop();
-
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                    const data = JSON.parse(line.slice(6));
-                                    if (data.type === 'text') {
-                                        resultText.value += data.content;
-                                        updateTextIndex('result');
-                                        refreshActiveHighlight();
-                                        if (autoScrollEnabled) {
-                                            resultText.scrollTop = resultText.scrollHeight;
-                                            syncHighlightScroll('result');
-                                        }
-                                    } else if (data.type === 'stats') {
-                                        stats = data.content;
-                                }
-                            } catch (e) {
-                                console.error('解析数据失败:', e, line);
-                            }
-                        }
+                    const frames = buffer.split(/\r?\n\r?\n/);
+                    buffer = frames.pop();
+                    for (const frame of frames) {
+                        processFrame(frame);
                     }
                 }
 
-                if (stats) {
-                    document.getElementById('stat-token-count').textContent = stats.token_count;
-                    document.getElementById('stat-prompt-tokens').textContent = stats.prompt_tokens;
-                    document.getElementById('stat-complete-tokens').textContent = stats.complete_tokens;
-                    document.getElementById('stat-prefill-speed').textContent = stats.prefill_speed;
-                    document.getElementById('stat-complete-speed').textContent = stats.complete_speed;
-                    document.getElementById('stat-total-time').textContent = stats.total_time;
-                    document.getElementById('stat-ttft').textContent = stats.ttft;
-                    document.getElementById('stat-tpot').textContent = stats.avg_tpot;
+                if (buffer.trim()) {
+                    processFrame(buffer);
                 }
-
+                if (!streamFailed && !cancelRequested && !resultText.value) {
+                    showError('模型未返回翻译结果');
+                }
             } catch (error) {
                 if (error.name !== 'AbortError') {
-                    errorDiv.textContent = '网络错误，请稍后重试';
-                    errorDiv.style.display = 'block';
+                    console.error('翻译请求失败:', error);
+                    showError(error.message || '网络错误，请稍后重试');
                 }
-                } finally {
-                    isTranslating = false;
-                    resultTextComplete = true;
-                    updateTextIndex('result');
-                    refreshActiveHighlight();
-                    currentReader = null;
-                    currentRequestId = null;
-                    btn.innerHTML = '翻译 (Translate)';
+            } finally {
+                isTranslating = false;
+                cancelRequested = false;
+                resultTextComplete = true;
+                updateTextIndex('result');
+                refreshActiveHighlight();
+                currentReader = null;
+                currentRequestId = null;
+                btn.disabled = false;
+                btn.innerHTML = '翻译 (Translate)';
                 btn.classList.remove('btn-cancel');
             }
         }
@@ -1127,8 +1223,13 @@
                 return;
             }
 
+            cancelRequested = true;
+            const btn = document.getElementById('translateBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span>正在取消 (Cancelling)...';
+
             try {
-                await fetch('/api/cancel', {
+                const response = await fetch('/api/cancel', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1137,8 +1238,15 @@
                         request_id: currentRequestId
                     })
                 });
+                if (!response.ok && response.status !== 404) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
             } catch (error) {
                 console.error('取消翻译请求失败:', error);
+                cancelRequested = false;
+                btn.disabled = false;
+                btn.innerHTML = '<span class="loading"></span>翻译中 (Translating)...';
+                showError('取消请求失败，翻译仍在继续');
             }
         }
 

@@ -1,8 +1,8 @@
-# HY-MLX-Translator - 混元1.8B模型Mac本地翻译助手
+# HY-MLX-Translator - Hy-MT2-1.8B Mac 本地翻译助手
 
 [English Version](README_EN.md)
 
-> 基于腾讯混元（Hunyuan）1.8B模型，使用 MLX 在 Apple Silicon Mac 上本地部署的翻译网站。支持流式生成翻译结果，提供实时的翻译体验。
+> 基于腾讯混元 Hy-MT2-1.8B，使用 MLX 在 Apple Silicon Mac 上本地部署的翻译网站。支持流式生成翻译结果，提供实时的翻译体验。
 > ⚠️ 该项目99%代码来由vibe coding实现！可能存在一些bug或不完善的地方。请在使用时保持谨慎。
 
 <p align="center">
@@ -11,7 +11,7 @@
 
 由于Google Translate经常因为网络问题而无法正常工作，所以决定vibe coding一个本地的翻译助手。由于笔者本人用的Mac电脑，因此采用了[MLX-LM框架](https://github.com/MLX-LM/MLX-LM)作为推理引擎来加速Mac上运行LLM的速度。
 
-模型选择上，笔者选择了[腾讯混元1.8B模型](https://huggingface.co/tencent/HY-MT1.5-1.8B)，因为其在Huggingface上宣传其翻译效果非常优秀，原文是“同规模模型中达到业界领先水平，超越大多数商业翻译 API”（笔者自己没有和其他同参数的模型做对比）。体感上该模型在论文翻译场景上能提供高质量的翻译结果。
+模型使用[腾讯混元 Hy-MT2-1.8B](https://huggingface.co/tencent/Hy-MT2-1.8B)。它面向多语言翻译和复杂真实场景优化，支持翻译指令跟随；本项目按模型官方推荐的提示词与采样参数进行推理。
 
 |  |
 |:--:|
@@ -20,12 +20,13 @@
 
 ## 近期更新
 
+- 🚀 推理模型升级为 Hy-MT2-1.8B，并适配官方提示词、聊天模板和推荐采样参数
 - ✨ 新增「消除回车 (Remove Line Breaks)」按钮，可一键删除输入文本中的所有换行符，解决复制粘贴时产生大量间断性回车的问题
 
 ## 项目特点
 
 - 🍎 **Mac设备友好**：完全在本地运行，并且在苹果M系列芯片上速度较快
-- 🌍 **多语言支持**：支持 33 种语言的翻译（当然主要靠混元牛逼）
+- 🌍 **多语言支持**：提供 Hy-MT2 README 所列的 38 个语言选项
 - ⚡ **流式输出**：实时展示翻译结果，无需等待完整生成
 - 📝 **参考翻译**：支持添加参考文本，提升翻译质量
 - 📊 **性能统计**：实时显示 Tokens 数、总耗时、TTFT、TPOT 等性能指标
@@ -34,7 +35,7 @@
 
 - **后端**：Flask + Flask-CORS
 - **框架**：MLX-LM（Apple Silicon 优化）
-- **模型**：HY-MT1.5-1.8B（腾讯混元）
+- **模型**：Hy-MT2-1.8B（腾讯混元）
 - **前端**：原生 HTML + CSS + JavaScript
 
 ## 本地运行步骤
@@ -51,7 +52,7 @@ pip install flask flask-cors mlx-lm
 bash download_model.sh
 ```
 
-该脚本会从 HuggingFace 下载 `tencent/HY-MT1.5-1.8B` 模型到本地 `HY-MT1.5-1.8B/` 目录。
+脚本优先通过 Hugging Face 下载 `tencent/Hy-MT2-1.8B`，也支持回退到 ModelScope，并将模型保存到本地 `Hy-MT2-1.8B/` 目录。
 
 ### 3. 启动服务
 
@@ -72,6 +73,7 @@ python app.py --host 0.0.0.0 --port 8080
 参数说明：
 - `--host`：指定监听地址（默认：`127.0.0.1`）
 - `--port`：指定端口号（默认：`5000`）
+- `--debug`：启用 Flask 调试模式（默认关闭）
 
 ## 对外暴露服务
 
@@ -85,7 +87,7 @@ python app.py --host 0.0.0.0 --port 5000
 
 ### ⚠️ 安全提醒
 
-- `debug=True` 仅用于开发环境，生产环境请设置为 `False`
+- 调试模式仅用于开发环境，生产环境请不要传入 `--debug`
 - 对外暴露服务时请注意网络安全，建议在可信网络环境中使用
 - 如需在公网访问，建议使用 Nginx 反向代理并配置 HTTPS
 
@@ -100,6 +102,8 @@ GET /api/languages
 响应示例：
 ```json
 {
+  "model": "Hy-MT2-1.8B",
+  "language_count": 38,
   "languages": {
     "Chinese": "中文",
     "English": "英语",
@@ -127,6 +131,7 @@ Content-Type: application/json
 ```
 
 响应使用 Server-Sent Events (SSE) 流式返回。
+事件类型包括模型状态 `status`、译文片段 `text`、推理错误 `error` 和性能数据 `stats`。
 
 ### 3. 取消翻译
 
@@ -141,10 +146,10 @@ Content-Type: application/json
 
 ## 致谢
 
-- 模型：腾讯混元[HY-MT1.5-1.8B](https://huggingface.co/tencent/HY-MT1.5-1.8B)
+- 模型：腾讯混元 [Hy-MT2-1.8B](https://huggingface.co/tencent/Hy-MT2-1.8B)
 - 推理框架：[MLX-LM](https://github.com/ml-explore/mlx-lm)
 - 代码：[豆包](https://www.doubao.com/chat/)
 
 ## 许可证
 
-请参考 HY-MT1.5-1.8B 模型的 License.txt 文件。
+请参考 `Hy-MT2-1.8B/LICENSE.txt`。
