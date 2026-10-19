@@ -251,10 +251,43 @@ async function loadLanguages() {
             return { options: {} };
         }
 
-        function removeLineBreaks() {
+        function joinWrappedLines() {
             const sourceText = document.getElementById('sourceText');
+            const text = sourceText.value;
 
-            sourceText.value = sourceText.value.replace(/[\r\n]+/g, '');
+            // 先合并断词：行尾连字符是排版断词的一部分，不属于原文。
+            // 使用 Unicode 字母/数字，兼容中文、日文等非 ASCII 文本。
+            let joinedText = text.replace(
+                /([\p{L}\p{N}])-[ \t]*(?:\r?\n)+[ \t]*(?=[\p{L}\p{N}])/gu,
+                '$1'
+            );
+
+            // 其他换行通常发生在两个词之间，需要补一个空格；
+            // 如果换行紧邻标点，则直接拼接，避免出现 "word ," 这类结果。
+            joinedText = joinedText.replace(
+                /[ \t]*(?:\r?\n)+[ \t]*/g,
+                (lineBreak, offset, fullText) => {
+                    const previous = fullText[offset - 1] || '';
+                    const next = fullText[offset + lineBreak.length] || '';
+                    if (!previous || !next) {
+                        return '';
+                    }
+                    if (/[,.;:!?%\u3001\u3002\uFF0C\uFF01\uFF1F\uFF1B\uFF1A\u2014)\]}>&"'\u201D\u2019\uFF09\u3011\u3009\u300D\u300F]/u.test(next)) {
+                        return '';
+                    }
+                    if (/[([{\u3008\u300A\u300C\u300E<\u201C\u2018\uFF08\u3010\u3008\u300C\u300E]/u.test(previous)) {
+                        return '';
+                    }
+                    // 中日韩文字本身不以空格分词，避免把中文段落变成逐句带空格。
+                    if (/^[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]$/u.test(previous) &&
+                        /^[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]$/u.test(next)) {
+                        return '';
+                    }
+                    return ' ';
+                }
+            );
+
+            sourceText.value = joinedText;
             handleTextChanged('source');
         }
 
