@@ -18,6 +18,7 @@ The project uses [Tencent Hunyuan Hy-MT2-1.8B](https://huggingface.co/tencent/Hy
 
 ## Recent Updates
 
+- 🔎 Added "Translate Selected Text": translate words or passages selected in the source using the current mode, with results in a collapsible area below the two columns.
 - 🧭 Added guided modes based on the official task examples: terminology uses a pair table, while the other modes show only the style, preference, format, or background fields they need. The old “Add Reference” workflow has been removed.
 - 🔌 Simplified the public API to a non-streaming JSON endpoint for default translation; the web UI keeps its internal SSE streaming experience.
 - 🚀 Upgraded the inference model to Hy-MT2-1.8B with its official prompts, chat template, and recommended sampling parameters
@@ -103,6 +104,12 @@ The web UI uses default translation unless another mode is selected. Each advanc
 - **Background information**: Provide context that helps disambiguate the source text.
 
 The prompts follow the official task examples in `Hy-MT2-1.8B/README.md`.
+
+### Translate Selected Text
+
+Select a word, sentence, or passage in the source on the left, then click "翻译选中文本" (Translate Selected Text). Streaming results appear in the collapsible "选中文本翻译" area below the two columns. Collapsing it does not stop generation. Translating another selection replaces only this result, leaving the full translation intact.
+
+Both translation buttons share the current target language, mode, and settings. Only one translation task can run per page: the active button cancels its task, while the other translation button is disabled. Cancelling keeps any text already generated.
 
 ## API Interface
 

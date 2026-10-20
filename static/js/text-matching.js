@@ -434,8 +434,8 @@ let activeSelectionSide = null;
             }
 
             function scheduleSelectionHighlight(side) {
-                if (side === 'result' && isTranslating) {
-                    autoScrollEnabled = false;
+                if (side === 'result') {
+                    stopTranslationAutoScroll('full');
                 }
                 window.clearTimeout(selectionTimer);
                 selectionTimer = window.setTimeout(() => {
@@ -460,6 +460,9 @@ let activeSelectionSide = null;
             function handleTextChanged(side) {
                 updateTextIndex(side);
                 clearHighlights();
+                if (side === 'source') {
+                    clearSourceSelection();
+                }
             }
 
         document.getElementById('targetLanguage').addEventListener('change', updateQuickLangButtons);
@@ -486,12 +489,6 @@ let activeSelectionSide = null;
             document.addEventListener('mousedown', (event) => {
                 if (!event.target.closest('.text-match-box')) {
                     clearHighlights();
-                }
-            });
-
-            resultTextarea.addEventListener('wheel', function() {
-                if (isTranslating) {
-                    autoScrollEnabled = false;
                 }
             });
 

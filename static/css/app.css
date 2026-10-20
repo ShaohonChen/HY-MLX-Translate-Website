@@ -199,12 +199,6 @@ select:focus {
     transform: none;
 }
 
-.btn-cancel,
-.btn-cancel:hover {
-    background: var(--danger);
-    border-color: var(--danger);
-}
-
 .btn-secondary {
     background: var(--surface);
     color: #4f5660;
@@ -215,6 +209,13 @@ select:focus {
     background: #eef1f5;
     color: var(--text);
     border-color: #adb5c1;
+}
+
+.btn-cancel,
+.btn-cancel:hover {
+    color: white;
+    background: var(--danger);
+    border-color: var(--danger);
 }
 
 .mode-options {
@@ -440,6 +441,28 @@ textarea[readonly] {
     background: #fbfcfe;
 }
 
+.selection-translation {
+    border-top: 1px solid var(--line);
+}
+
+.selection-translation summary {
+    padding: 13px 18px;
+    color: #3f444b;
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+    user-select: none;
+}
+
+.selection-translation[open] summary {
+    border-bottom: 1px solid var(--line);
+}
+
+.selection-translation .selection-result-box {
+    height: 240px;
+    min-height: 0;
+}
+
 .text-match-box textarea {
     position: absolute;
     inset: 0;
@@ -661,7 +684,7 @@ textarea[readonly] {
     text-decoration: underline;
 }
 
-@media (max-width: 1040px) {
+@media (max-width: 1200px) {
     .controls {
         grid-template-columns: 1fr;
     }
@@ -721,7 +744,7 @@ textarea[readonly] {
     }
 
     #translateBtn {
-        grid-column: auto;
+        grid-column: 1 / -1;
     }
 
     .terminology-table {

@@ -34,6 +34,7 @@
                 </div>
                 <div class="action-section">
                     <button class="btn btn-secondary" id="joinWrappedLinesBtn" type="button" onclick="joinWrappedLines()" title="合并因排版产生的换行，并修复断词">合并排版换行</button>
+                    <button class="btn btn-secondary" id="translateSelectionBtn" type="button" onclick="handleButtonClick('selection')" title="选中左侧原文后翻译" disabled>翻译选中文本</button>
                     <button class="btn" id="translateBtn" type="button" onclick="handleButtonClick()">翻译</button>
                 </div>
                 <section class="mode-options" id="modeOptions" aria-live="polite">
@@ -109,6 +110,12 @@
                     </div>
                 </section>
             </div>
+            <details class="selection-translation" id="selectionTranslation" hidden>
+                <summary id="selectionResultLabel">选中文本翻译</summary>
+                <div class="text-match-box result-box selection-result-box">
+                    <textarea id="selectionResultText" class="result-textarea" aria-labelledby="selectionResultLabel" readonly placeholder="翻译结果将在这里实时生成"></textarea>
+                </div>
+            </details>
         </main>
 
         <div id="error" style="display: none;" class="error" role="alert" aria-live="polite"></div>

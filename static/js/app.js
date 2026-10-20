@@ -68,7 +68,7 @@ async function loadLanguages() {
                 showError('语言列表加载失败，请确认后端服务正常后刷新页面');
             } finally {
                 select.disabled = select.options.length === 0 || !select.value;
-                translateBtn.disabled = select.disabled;
+                updateTranslationButtons();
             }
         }
 
@@ -123,6 +123,7 @@ async function loadLanguages() {
                 const langKey = btn.id.replace('quick', '').replace('Btn', '');
                 btn.classList.toggle('active', select.value === langKey);
             });
+            updateTranslationButtons();
         }
 
         function updateModeFields() {
@@ -303,213 +304,299 @@ async function loadLanguages() {
         }
 
 
-        let currentRequestId = null;
-        let currentReader = null;
-        let isTranslating = false;
-        let cancelRequested = false;
-        let autoScrollEnabled = true;
-        let resultTextComplete = true;
-        function handleButtonClick() {
-            if (isTranslating) {
-                cancelTranslate();
-            } else {
-                doTranslate();
-            }
+// Both entry points share one task; only full translation updates text matching.
+const translationTargets = {
+    full: { buttonId: 'translateBtn', resultId: 'resultText', label: '翻译' },
+    selection: {
+        buttonId: 'translateSelectionBtn',
+        resultId: 'selectionResultText',
+        label: '翻译选中文本'
+    }
+};
+const translationStatusLabels = {
+    loading_model: '加载模型…',
+    waiting_inference: '等待推理…',
+    translating: '取消翻译'
+};
+let activeTask = null;
+let sourceSelection = null;
+let resultTextComplete = true;
+
+function getSelectedSourceText() {
+    const source = document.getElementById('sourceText');
+    if (!sourceSelection || sourceSelection.value !== source.value) {
+        return '';
+    }
+    return source.value.slice(sourceSelection.start, sourceSelection.end);
+}
+
+function captureSourceSelection() {
+    const source = document.getElementById('sourceText');
+    sourceSelection = source.selectionStart === source.selectionEnd ? null : {
+        start: source.selectionStart,
+        end: source.selectionEnd,
+        value: source.value
+    };
+    updateTranslationButtons();
+}
+
+function clearSourceSelection() {
+    sourceSelection = null;
+    updateTranslationButtons();
+}
+
+function updateTranslationButtons() {
+    const language = document.getElementById('targetLanguage');
+    const languageReady = !language.disabled && Boolean(language.value);
+    for (const [kind, target] of Object.entries(translationTargets)) {
+        const button = document.getElementById(target.buttonId);
+        const running = activeTask?.kind === kind;
+        button.classList.toggle('btn-cancel', running);
+        if (running) {
+            button.disabled = activeTask.cancelRequested;
+            const label = activeTask.cancelRequested ? '正在取消…' :
+                translationStatusLabels[activeTask.status];
+            button.innerHTML = `<span class="loading" aria-hidden="true"></span>${label}`;
+            button.title = '取消当前翻译';
+            button.setAttribute('aria-label', label);
+        } else {
+            button.textContent = target.label;
+            button.disabled = Boolean(activeTask) || !languageReady ||
+                (kind === 'selection' && !getSelectedSourceText().trim());
+            button.title = kind === 'selection' ? '选中左侧原文后翻译' : '翻译全部原文';
+            button.setAttribute('aria-label', target.label);
+        }
+    }
+}
+
+function handleButtonClick(kind = 'full') {
+    if (activeTask) {
+        if (activeTask.kind === kind) {
+            cancelTranslate();
+        }
+        return;
+    }
+    doTranslate(kind);
+}
+
+function updateStats(stats) {
+    document.getElementById('stat-token-count').textContent = stats.token_count;
+    document.getElementById('stat-prompt-tokens').textContent = stats.prompt_tokens;
+    document.getElementById('stat-complete-tokens').textContent = stats.complete_tokens;
+    document.getElementById('stat-prefill-speed').textContent = stats.prefill_speed;
+    document.getElementById('stat-complete-speed').textContent = stats.complete_speed;
+    document.getElementById('stat-total-time').textContent = stats.total_time;
+    document.getElementById('stat-ttft').textContent = stats.ttft;
+    document.getElementById('stat-tpot').textContent = stats.avg_tpot;
+}
+
+function stopTranslationAutoScroll(kind) {
+    if (activeTask?.kind === kind) {
+        activeTask.autoScrollEnabled = false;
+    }
+}
+
+function refreshTranslationResult(task) {
+    if (task.kind === 'full') {
+        updateTextIndex('result');
+        refreshActiveHighlight();
+    }
+    if (task.autoScrollEnabled) {
+        task.result.scrollTop = task.result.scrollHeight;
+        if (task.kind === 'full') {
+            syncHighlightScroll('result');
+        }
+    }
+}
+
+async function doTranslate(kind = 'full') {
+    if (activeTask || !translationTargets[kind]) {
+        return;
+    }
+    const sourceText = kind === 'selection' ? getSelectedSourceText() :
+        document.getElementById('sourceText').value.trim();
+    const targetLanguage = document.getElementById('targetLanguage').value;
+    const mode = document.getElementById('translationMode').value || 'default';
+    const modeResult = collectModeOptions(mode);
+    clearError();
+
+    // Validate before replacing either result or starting a task.
+    if (!sourceText.trim()) {
+        showError(kind === 'selection' ? '请先选中左侧原文中的文本' : '请输入要翻译的文本');
+        return;
+    }
+    if (!targetLanguage) {
+        showError('请选择目标语言');
+        return;
+    }
+    if (modeResult.error) {
+        showError(modeResult.error);
+        modeResult.focus?.focus();
+        return;
+    }
+
+    const task = {
+        kind,
+        requestId: window.crypto?.randomUUID?.() ||
+            `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        result: document.getElementById(translationTargets[kind].resultId),
+        status: 'translating',
+        cancelRequested: false,
+        responseReceived: false,
+        autoScrollEnabled: true
+    };
+    activeTask = task;
+    task.result.value = '';
+    task.result.placeholder = '翻译结果将在这里实时生成';
+    task.result.setAttribute('aria-busy', 'true');
+    if (kind === 'full') {
+        resultTextComplete = false;
+        updateAllTextIndexes();
+        clearHighlights();
+    } else {
+        const panel = document.getElementById('selectionTranslation');
+        panel.hidden = false;
+        panel.open = true;
+    }
+    resetStats();
+    updateTranslationButtons();
+
+    let reader = null;
+    try {
+        const response = await fetch('/api/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: sourceText,
+                target_language: targetLanguage,
+                request_id: task.requestId,
+                mode,
+                mode_options: modeResult.options || {}
+            })
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `翻译失败（HTTP ${response.status}）`);
+        }
+        if (!response.body) {
+            throw new Error('浏览器不支持流式响应');
+        }
+        reader = response.body.getReader();
+        task.responseReceived = true;
+        // A click before response headers must wait until the server registers the request.
+        if (task.cancelRequested) {
+            await cancelTranslate(task);
         }
 
-        function updateStats(stats) {
-            document.getElementById('stat-token-count').textContent = stats.token_count;
-            document.getElementById('stat-prompt-tokens').textContent = stats.prompt_tokens;
-            document.getElementById('stat-complete-tokens').textContent = stats.complete_tokens;
-            document.getElementById('stat-prefill-speed').textContent = stats.prefill_speed;
-            document.getElementById('stat-complete-speed').textContent = stats.complete_speed;
-            document.getElementById('stat-total-time').textContent = stats.total_time;
-            document.getElementById('stat-ttft').textContent = stats.ttft;
-            document.getElementById('stat-tpot').textContent = stats.avg_tpot;
-        }
-
-        function updateTranslationStatus(status, btn) {
-            const labels = {
-                loading_model: '加载模型…',
-                waiting_inference: '等待推理…',
-                translating: '翻译中…'
-            };
-            if (!cancelRequested && labels[status]) {
-                btn.innerHTML = `<span class="loading"></span>${labels[status]}`;
-            }
-        }
-
-        async function doTranslate() {
-            const targetLanguage = document.getElementById('targetLanguage').value;
-            const sourceText = document.getElementById('sourceText').value.trim();
-            const mode = document.getElementById('translationMode').value || 'default';
-            const modeResult = collectModeOptions(mode);
-            const modeOptions = modeResult.options || {};
-            const btn = document.getElementById('translateBtn');
-            const resultText = document.getElementById('resultText');
-
-            resultText.value = '';
-            resultTextComplete = false;
-            updateAllTextIndexes();
-            clearHighlights();
-            clearError();
-            resetStats();
-
-            if (!sourceText) {
-                showError('请输入要翻译的文本');
-                resultTextComplete = true;
-                updateTextIndex('result');
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let streamFailed = false;
+        const processFrame = frame => {
+            const dataLine = frame.split('\n').find(line => line.startsWith('data: '));
+            if (!dataLine) {
                 return;
             }
-
-            if (!targetLanguage) {
-                showError('请选择目标语言');
-                resultTextComplete = true;
-                updateTextIndex('result');
-                return;
-            }
-
-            if (modeResult.error) {
-                showError(modeResult.error);
-                resultTextComplete = true;
-                updateTextIndex('result');
-                modeResult.focus?.focus();
-                return;
-            }
-
-            isTranslating = true;
-            cancelRequested = false;
-            autoScrollEnabled = true;
-            currentRequestId = window.crypto?.randomUUID?.() ||
-                `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-            btn.innerHTML = '<span class="loading"></span>翻译中…';
-            btn.classList.add('btn-cancel');
-
+            let data;
             try {
-                const response = await fetch('/api/translate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        text: sourceText,
-                        target_language: targetLanguage,
-                        request_id: currentRequestId,
-                        mode,
-                        mode_options: modeOptions
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    showError(errorData.error || `翻译失败（HTTP ${response.status}）`);
-                    return;
-                }
-                if (!response.body) {
-                    throw new Error('浏览器不支持流式响应');
-                }
-
-                currentReader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
-                let streamFailed = false;
-
-                const processFrame = frame => {
-                    const dataLine = frame.split('\n').find(line => line.startsWith('data: '));
-                    if (!dataLine) {
-                        return;
-                    }
-                    try {
-                        const data = JSON.parse(dataLine.slice(6));
-                        if (data.type === 'text') {
-                            resultText.value += data.content;
-                            updateTextIndex('result');
-                            refreshActiveHighlight();
-                            if (autoScrollEnabled) {
-                                resultText.scrollTop = resultText.scrollHeight;
-                                syncHighlightScroll('result');
-                            }
-                        } else if (data.type === 'status') {
-                            updateTranslationStatus(data.content, btn);
-                        } else if (data.type === 'error') {
-                            streamFailed = true;
-                            showError(data.content || '模型推理失败');
-                        } else if (data.type === 'stats') {
-                            updateStats(data.content);
-                        }
-                    } catch (error) {
-                        console.error('解析流式数据失败:', error, frame);
-                    }
-                };
-
-                while (true) {
-                    const { done, value } = await currentReader.read();
-                    if (done) {
-                        buffer += decoder.decode();
-                        break;
-                    }
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const frames = buffer.split(/\r?\n\r?\n/);
-                    buffer = frames.pop();
-                    for (const frame of frames) {
-                        processFrame(frame);
-                    }
-                }
-
-                if (buffer.trim()) {
-                    processFrame(buffer);
-                }
-                if (!streamFailed && !cancelRequested && !resultText.value) {
-                    showError('模型未返回翻译结果');
-                }
+                data = JSON.parse(dataLine.slice(6));
             } catch (error) {
-                if (error.name !== 'AbortError') {
-                    console.error('翻译请求失败:', error);
-                    showError(error.message || '网络错误，请稍后重试');
-                }
-            } finally {
-                isTranslating = false;
-                cancelRequested = false;
-                resultTextComplete = true;
-                updateTextIndex('result');
-                refreshActiveHighlight();
-                currentReader = null;
-                currentRequestId = null;
-                btn.disabled = false;
-                btn.innerHTML = '翻译';
-                btn.classList.remove('btn-cancel');
-            }
-        }
-
-        async function cancelTranslate() {
-            if (!isTranslating || !currentRequestId) {
+                console.error('解析流式数据失败:', error, frame);
                 return;
             }
-
-            cancelRequested = true;
-            const btn = document.getElementById('translateBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<span class="loading"></span>正在取消…';
-
-            try {
-                const response = await fetch('/api/cancel', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        request_id: currentRequestId
-                    })
-                });
-                if (!response.ok && response.status !== 404) {
-                    throw new Error(`HTTP ${response.status}`);
+            if (data.type === 'text') {
+                task.result.value += data.content;
+                refreshTranslationResult(task);
+            } else if (data.type === 'status' && translationStatusLabels[data.content]) {
+                task.status = data.content;
+                updateTranslationButtons();
+            } else if (data.type === 'error') {
+                streamFailed = true;
+                showError(data.content || '模型推理失败');
+            } else if (data.type === 'stats') {
+                updateStats(data.content);
+                if (data.content.cancelled) {
+                    task.result.placeholder = '翻译已取消';
                 }
-            } catch (error) {
-                console.error('取消翻译请求失败:', error);
-                cancelRequested = false;
-                btn.disabled = false;
-                btn.innerHTML = '<span class="loading"></span>翻译中…';
-                showError('取消请求失败，翻译仍在继续');
+            }
+        };
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+                buffer += decoder.decode();
+                break;
+            }
+            buffer += decoder.decode(value, { stream: true });
+            const frames = buffer.split(/\r?\n\r?\n/);
+            buffer = frames.pop();
+            for (const frame of frames) {
+                processFrame(frame);
             }
         }
+        if (buffer.trim()) {
+            processFrame(buffer);
+        }
+        if (!streamFailed && !task.cancelRequested && !task.result.value) {
+            showError('模型未返回翻译结果');
+        }
+    } catch (error) {
+        console.error('翻译请求失败:', error);
+        showError(error.message || '网络错误，请稍后重试');
+    } finally {
+        reader?.releaseLock();
+        task.result.setAttribute('aria-busy', 'false');
+        if (kind === 'full') {
+            resultTextComplete = true;
+            updateTextIndex('result');
+            refreshActiveHighlight();
+        }
+        activeTask = null;
+        updateTranslationButtons();
+    }
+}
+
+async function cancelTranslate(task = activeTask) {
+    if (!task || activeTask !== task) {
+        return;
+    }
+    task.cancelRequested = true;
+    updateTranslationButtons();
+    if (!task.responseReceived) {
+        return;
+    }
+    try {
+        const response = await fetch('/api/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ request_id: task.requestId })
+        });
+        if (!response.ok && response.status !== 404) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+    } catch (error) {
+        // An old cancellation response must not affect a later task.
+        if (activeTask === task) {
+            task.cancelRequested = false;
+            updateTranslationButtons();
+            console.error('取消翻译请求失败:', error);
+            showError('取消请求失败，翻译仍在继续');
+        }
+    }
+}
+
+const selectionSource = document.getElementById('sourceText');
+for (const eventName of ['select', 'mouseup', 'keyup', 'touchend', 'focus', 'blur']) {
+    selectionSource.addEventListener(eventName, captureSourceSelection);
+}
+document.addEventListener('selectionchange', () => {
+    if (document.activeElement === selectionSource) {
+        captureSourceSelection();
+    }
+});
+for (const kind of ['full', 'selection']) {
+    const result = document.getElementById(translationTargets[kind].resultId);
+    result.addEventListener('focus', clearSourceSelection);
+    result.addEventListener('wheel', () => stopTranslationAutoScroll(kind));
+    result.addEventListener('touchmove', () => stopTranslationAutoScroll(kind));
+    result.addEventListener('select', () => stopTranslationAutoScroll(kind));
+}
